@@ -1,0 +1,39 @@
+{
+    "training": {
+        "swe": [
+            {
+                "id": "SWE-SKLEARN-10558",
+                "difficulty": "Hard",
+                "repo": "scikit-learn/scikit-learn",
+                "problem_statement": "Deprecate the 'axis' parameter in SimpleImputer. Currently, SimpleImputer supports an 'axis' parameter (legacy from Imputer) which was used to specify whether to impute along rows or columns. However, modern sklearn transformers should only work on samples (rows) and shouldn't have an axis parameter. Implement a deprecation warning if axis=1 is passed and ensure functionality remains consistent with axis=0 by default.",
+                "test_cases": "1. Initialize SimpleImputer(axis=1) and check for DeprecationWarning. 2. Verify that SimpleImputer works correctly with default settings on a 2D array with NaNs."
+            },
+            {
+                "id": "SWE-DJANGO-31514",
+                "difficulty": "Hard",
+                "repo": "django/django",
+                "problem_statement": "QuerySet.union() fails when using slicing. When combining two sliced querysets using union(), the resulting SQL should respect the limits and offsets of the individual querysets. Currently, some database backends (like SQLite) might ignore the slicing when combined. Implement a check or a wrapper to ensure sliced querysets are treated as subqueries during a union operation.",
+                "test_cases": "1. Create two sliced querysets. 2. Call union() on them. 3. Verify the result count matches the sum of the individual slice limits."
+            },
+            {
+                "id": "SWE-SYMPY-13471",
+                "difficulty": "Hard",
+                "repo": "sympy/sympy",
+                "problem_statement": "simplify() fails on complex nested exponentials. Given an expression like exp(exp(x))/exp(x), common simplification rules should reduce this if possible or at least handle the nested structure without a RecursionError. Implement a more robust expansion for nested exponentials in the simplify() core.",
+                "test_cases": "1. simplify(exp(exp(x))/exp(x)) should not error. 2. verify basic simplification of exp(a)*exp(b) -> exp(a+b)."
+            }
+        ],
+        "lcb": [
+            {
+                "id": "LCB-HARD-001",
+                "difficulty": "Competition",
+                "problem_statement": "Find the maximum sum of a non-adjacent subsequence in a circular array. Given an array of integers representing house values on a circular street, find the maximum amount of money you can rob without alerting the police (cannot rob adjacent houses).",
+                "test_cases": "1. [2,3,2] -> 3. 2. [1,2,3,1] -> 4."
+            }
+        ]
+    },
+    "test": {
+        "swe": [],
+        "lcb": []
+    }
+}

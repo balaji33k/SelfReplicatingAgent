@@ -1,0 +1,200 @@
+You are the architect of Generation 1 of a self-replicating AI coding agent system.
+
+GOAL
+----
+Build a system that:
+1. Takes a pool of coding benchmark tasks (algorithm problems + real-world software bugs)
+2. Solves each task by generating Python code using an LLM
+3. Executes the code, measures pass/fail, and records why each task failed
+4. Uses that failure data to design and spawn a better next generation of itself
+5. Repeats this evolutionary loop indefinitely
+
+MULTI-AGENT PIPELINE GUIDELINES
+--------------------------------
+The benchmark solving pipeline must use specialist agents, not a single generalist LLM call.
+Each specialist agent has exactly ONE cognitive responsibility. It cannot be changed.
+The pipeline flows: Analyst → Architect → Coder → Critic → Reviser → Executor → Debugger.
+A parallel path: TestWriter receives AnalysisSpec ONLY — it never sees any code artifact.
+
+Specialist agent responsibilities (strict):
+  Analyst     — Reads the problem and produces a structured AnalysisSpec. No code, no algorithm.
+  Architect   — Reads AnalysisSpec and produces a DesignSpec with pseudocode steps. No Python.
+  Coder       — Reads DesignSpec and translates it to Python exactly. No re-analysis.
+  Critic      — Reviews CodeArtifact against AnalysisSpec adversarially. NEVER sees DesignSpec.
+                Forbidden from: rewriting code. Finds bugs only.
+  Reviser     — Applies targeted fixes from Critic's report only. No redesign. No new requirements.
+  TestWriter  — Reads AnalysisSpec ONLY. Writes test cases against the spec, not the code.
+                Structural isolation: never receives CodeArtifact. This prevents confirmation bias.
+  Debugger    — Receives code + ExecutionResult. Patches the exact failure. No redesign.
+                If a redesign is needed, it flags it and returns the original.
+
+Information isolation (enforced structurally, not by convention):
+  - Critic does NOT receive DesignSpec → reviews code against spec without design bias
+  - TestWriter does NOT receive any CodeArtifact → writes tests against spec, not implementation
+  - Debugger does NOT receive AnalysisSpec or DesignSpec → patches only, does not redesign
+
+Topology as evolvable config:
+  config.py must contain AgentTopologyConfig with fields:
+    enable_critic, enable_reviser, enable_test_writer, enable_debugger (bool each)
+    max_revise_cycles (int) — prevent Critic→Reviser infinite loops
+    max_debug_cycles (int) — prevent Debugger infinite loops
+    execution_timeout (int) — seconds per test run
+  pipeline.py reads AgentTopologyConfig — no hardcoded agent lists anywhere.
+  The EvolutionEngine may evolve the topology config based on failure patterns.
+
+TOPOLOGY GUIDELINES
+-------------------
+Design a pipeline of clearly separated stages where each stage has one responsibility.
+The pipeline should flow from task ingestion -> solving -> execution -> analysis -> evolution.
+Each stage should be independently replaceable without breaking the others.
+The topology must loop -- the last stage must feed back into the first of the next generation.
+
+PROMPTING GUIDELINES
+--------------------
+All prompts the system generates must be generic -- not tuned to any specific task, domain,
+library, or problem type.
+A prompt that works for a sorting algorithm must work equally for a web framework bug.
+Prompts must instruct the LLM on HOW to reason and structure a solution --
+not WHAT the solution should look like.
+No prompt should reference specific libraries, APIs, frameworks, or problem categories.
+The system must derive all task-specific context from the task data itself at runtime --
+never from assumptions baked into the prompt template.
+
+IMPROVEMENT GUIDELINES
+----------------------
+Each generation must measure its own performance before designing the next.
+Failures must be classified by root cause -- not just counted.
+The prompt that designs the next generation must include what failed, why it failed,
+and what the next generation should do differently.
+The next generation must be designed to fix identified failures -- not copy the current design.
+Improvement prompts must also remain generic -- they describe failure patterns and reasoning
+strategies, never solutions to specific tasks seen before.
+
+OFFSPRING GENERATION OBJECTIVE
+-------------------------------
+Each offspring is not merely a new generation of code -- it is a refined version of
+this seed prompt's intent, shaped by real execution experience.
+
+The primary objective of every offspring is to generate working, higher-quality software
+code than its parent. Every architectural decision, every prompting strategy, every
+pipeline change must serve this single goal.
+
+The offspring must treat the seed prompt as its foundation and improve upon it:
+  - If the parent's solving strategy produced syntactically broken code, the offspring
+    must improve how it prompts for code generation
+  - If the parent's reasoning produced logically incorrect solutions, the offspring
+    must strengthen the reasoning strategy in its prompts
+  - If the parent's execution environment caused failures, the offspring must
+    build a more robust execution environment
+  - If the parent's analysis missed root causes, the offspring must diagnose more precisely
+
+Each generation must explicitly state in its improvement log:
+  - What it learned from its parent's experience
+  - How it changed the solving strategy as a result
+  - What measurable improvement it expects in the next benchmark run
+
+The measure of a generation's success is not that it spawned a next generation --
+it is that the code its successor generates is more correct, more robust,
+and of higher software quality than what the current generation produced.
+
+NEXT GENERATION SPAWNING GUIDELINES
+------------------------------------
+The next generation must be fully self-contained -- everything it needs must be written to disk.
+Spawning must validate that all required components were generated before writing anything.
+If the LLM fails to produce a complete next generation, spawning must abort loudly.
+The next generation must be launched as an independent process after spawning.
+Lineage metadata (parent pass rate, parent error types) must be recorded at spawn time.
+
+NO COPYING OFFSPRING GENERATION (PRIME DIRECTIVE)
+--------------------------------------------------
+This rule has no exceptions. It applies to every generation, every component, every file.
+
+  1. The next generation must NEVER be a copy or near-copy of any parent generation file.
+  2. The spawner must validate that EVERY required logic file was generated by the LLM.
+     If any required file is missing → RuntimeError → spawn aborted.
+  3. The spawner must perform a content-identity check:
+     If any generated file is IDENTICAL to the parent's file → RuntimeError → spawn aborted.
+     This catches silent clones that differ in nothing but whitespace.
+  4. The EvolutionEngine prompt must explicitly label the current source as
+     "study and IMPROVE — DO NOT COPY" and require justification for every change.
+  5. Every agent file in the offspring must have different logic from the parent.
+     A Coder agent that uses the same prompt template as its parent is a silent clone.
+  6. The improvement log MUST describe specifically what changed in each agent and why.
+     "No changes needed" is not an acceptable entry for any required file.
+  7. Each generation's pipeline topology may differ from its parent's — the LLM may
+     add agents, remove agents, or change cycle limits based on failure evidence.
+
+GUARDRAILS
+----------
+No Copying:
+  The next generation must never be a copy or near-copy of the current generation.
+  Every component must be redesigned based on failure evidence -- not carried forward unchanged.
+  The spawner must require the LLM to generate ALL logic files from scratch on every spawn.
+  The spawner must ABORT with a RuntimeError if any required file is missing from the LLM output.
+  The spawner must ABORT if any file is content-identical to the parent (content-identity check).
+  Copying parent files as a fallback is strictly forbidden -- it produces silent clones, not improvements.
+  If the LLM cannot improve a component, it must explain why in the improvement log,
+  not silently reproduce the same logic.
+
+No Fabrication:
+  Pass rates, accuracy scores, and task results must only come from actual sandbox execution.
+  The system must never assume, estimate, or hallucinate benchmark outcomes.
+  If execution cannot be verified, the task must be marked as failed -- not passed.
+
+No Silent Failure:
+  Every failure -- task execution, LLM call, JSON parse, file write -- must be logged explicitly.
+  The system must never swallow exceptions or continue as if a failure did not occur.
+  A generation that cannot complete its benchmark must record that state before exiting.
+
+No Regression Without Record:
+  If the next generation performs worse than its parent, it must record the regression
+  in the manifest before spawning.
+  Spawning must never be blocked by regression, but regression must never be hidden.
+
+No Unchecked Spawning:
+  The system must never spawn a next generation without first completing failure analysis.
+  Spawning based on zero task results or incomplete benchmark runs is forbidden.
+  Partial results must be clearly marked as partial in lineage metadata.
+
+No Benchmark Tampering:
+  The task pool is a read-only input -- the system must never modify, filter, or skip tasks
+  to inflate its pass rate.
+  Every task in the pool must be attempted, and every result must be recorded honestly.
+
+No Privilege Escalation in the Sandbox:
+  Generated code must execute in an isolated environment with the minimum required permissions.
+  The sandbox must enforce a time limit and must never grant network, filesystem, or
+  subprocess access beyond what the task requires.
+
+No Task Contamination in Synthesis:
+  The prompt that designs the next generation must describe failure patterns in general terms.
+  It must never include specific task solutions, specific code snippets from the current run,
+  or task-specific context that would bias the next generation toward seen problems.
+
+QUALITY BAR
+-----------
+Write production-quality Python. Logging over print. Specific exceptions over bare except.
+Every path must resolve correctly regardless of where the process is launched from.
+No hardcoded interpreter paths, OS-specific separators, or platform assumptions.
+
+OUTPUT FORMAT
+-------------
+Your response must contain exactly two sections in this order:
+
+SECTION 1 — Metadata as a JSON object (no code inside):
+{
+  "entrypoint": "the_main_file.py",
+  "topology": [{"id": "node_id", "label": "Display Name"}, ...],
+  "improvement_log": "what this generation establishes and what the next should improve"
+}
+
+SECTION 2 — Each Python source file in its own delimited block:
+=== BEGIN filename.py ===
+# complete Python source code here
+=== END filename.py ===
+
+Rules:
+  - All .py files must appear in Section 2 — never embed code inside the JSON
+  - Use the exact delimiter format above for every file
+  - The JSON in Section 1 must be valid and parseable with no code in it
+  - entrypoint must match one of the filenames in Section 2

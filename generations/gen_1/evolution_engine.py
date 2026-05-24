@@ -1,0 +1,300 @@
+"""
+evolution_engine.py — Designs the next generation from failure evidence.
+
+Groq-compatible design: generates files ONE AT A TIME to stay within the
+12,000 tokens-per-minute free-tier limit. Each call generates a single .py
+file (~2,000 tokens) rather than all 18 files at once (~50,000 tokens).
+
+Key guarantees:
+  1. The LLM receives the full failure analysis for every file it generates.
+  2. Each agent file gets a targeted prompt: "fix the failures this agent caused".
+  3. Anti-clone: every file must differ meaningfully from its parent version.
+  4. Missing or compile-invalid files abort the spawn (no silent failures).
+"""
+import json
+import logging
+import os
+import re
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Dict, List, Optional
+
+from analysis import AnalysisReport
+from config import Config, LLMConfig
+from llm_client import LLMClient
+
+logger = logging.getLogger(__name__)
+
+# Infrastructure files the LLM should NOT regenerate
+INFRA_FILES = {"telemetry.py", "lineage_memory.py"}
+
+# Files the LLM MUST generate (one at a time on Groq free tier)
+REQUIRED_FILES = [
+    "main.py", "config.py", "llm_client.py", "task_manager.py",
+    "analysis.py", "evolution_engine.py", "spawner.py",
+    # Multi-agent pipeline
+    "contracts.py", "agent_base.py", "pipeline.py",
+    # Specialist agents
+    "agent_analyst.py", "agent_architect.py", "agent_coder.py",
+    "agent_critic.py", "agent_reviser.py", "agent_test_writer.py",
+    "agent_debugger.py",
+    # Clone guard
+    "agent_clone_inspector.py",
+]
+
+# Delay between per-file LLM calls to stay inside TPM budget (seconds)
+# 12K TPM / ~2.5K tokens per call = 4 calls/min safely with 15s gap
+INTER_FILE_DELAY = 15
+
+
+@dataclass
+class NextGenerationDesign:
+    """Holds the complete design for the next generation."""
+    new_config: Config
+    new_prompts_content: Dict[str, str] = field(default_factory=dict)
+    improvement_log_message: str = ""
+
+
+class EvolutionEngine:
+    """
+    Designs the next generation one file at a time.
+
+    Two-phase approach:
+      Phase 1 — Planning (~500 tokens): asks the LLM for a concise improvement
+                plan that explains what to change in each file and why.
+      Phase 2 — Generation (one call per file, ~2K tokens each): uses the plan
+                to generate each file individually with a targeted prompt.
+
+    This keeps every API call under ~3,000 tokens, well within Groq's
+    12,000 TPM free-tier limit.
+    """
+
+    def __init__(self, llm_config: LLMConfig):
+        self.llm_client = LLMClient(llm_config)
+        self.gen_dir = Path(__file__).resolve().parent
+
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    def design_next_generation(
+        self, analysis_report: AnalysisReport, parent_config: Config
+    ) -> NextGenerationDesign:
+        gen_num = parent_config.generation_number
+        next_gen = gen_num + 1
+        logger.info(f"Designing Generation {next_gen} from failure evidence (one file at a time)...")
+
+        failure_ctx = self._build_failure_context(analysis_report, parent_config)
+        current_source = self._load_current_source()
+
+        # Phase 1: Get improvement plan
+        improvement_log = self._get_improvement_plan(failure_ctx, current_source, gen_num, next_gen)
+        logger.info(f"Improvement plan: {improvement_log[:120]}...")
+
+        # Phase 2: Generate each file individually
+        files: Dict[str, str] = {}
+        for i, fname in enumerate(REQUIRED_FILES):
+            logger.info(f"  Generating [{i+1}/{len(REQUIRED_FILES)}]: {fname}")
+            parent_snippet = current_source.get(fname, "")[:400]
+            content = self._generate_one_file(
+                fname=fname,
+                improvement_log=improvement_log,
+                failure_ctx=failure_ctx,
+                parent_snippet=parent_snippet,
+                gen_num=gen_num,
+                next_gen=next_gen,
+            )
+            files[fname] = content
+            # Respect TPM budget — wait between calls (except after the last)
+            if i < len(REQUIRED_FILES) - 1:
+                time.sleep(INTER_FILE_DELAY)
+
+        missing = [f for f in REQUIRED_FILES if f not in files]
+        if missing:
+            raise RuntimeError(f"Evolution incomplete — missing files: {missing}")
+
+        logger.info(f"Generation {next_gen} design complete. {len(files)} files generated.")
+
+        new_config = parent_config
+        new_config.improvement_log = improvement_log
+        return NextGenerationDesign(
+            new_config=new_config,
+            new_prompts_content=files,
+            improvement_log_message=improvement_log,
+        )
+
+    # ── Phase 1: Planning ─────────────────────────────────────────────────────
+
+    def _get_improvement_plan(
+        self,
+        failure_ctx: str,
+        current_source: Dict[str, str],
+        gen_num: int,
+        next_gen: int,
+    ) -> str:
+        """
+        Ask the LLM for a concise improvement plan (plain text, no code).
+        Kept short so it fits in ~500 output tokens.
+        """
+        source_summary = "\n".join(
+            f"- {fname}: {len(src)} chars" for fname, src in current_source.items()
+        )
+        prompt = f"""You are designing Generation {next_gen} of a self-replicating AI coding agent.
+
+FAILURE ANALYSIS (Generation {gen_num}):
+{failure_ctx}
+
+CURRENT ARCHITECTURE FILES:
+{source_summary}
+
+Write a concise improvement plan (plain text, no code, max 300 words) that explains:
+1. What the root causes of failure are
+2. Which specific files need to change and what must be different
+3. What improvement you expect in Generation {next_gen}'s pass rate
+
+Be specific about agent prompts, pipeline logic, and error handling improvements."""
+
+        response = self.llm_client.call(prompt)
+        return response.strip()[:1500]  # Cap at 1500 chars
+
+    # ── Phase 2: Per-file generation ──────────────────────────────────────────
+
+    def _generate_one_file(
+        self,
+        fname: str,
+        improvement_log: str,
+        failure_ctx: str,
+        parent_snippet: str,
+        gen_num: int,
+        next_gen: int,
+    ) -> str:
+        """
+        Generate a single .py file for the next generation.
+        The prompt is deliberately compact to stay within Groq's TPM budget.
+        """
+        anti_clone = (
+            f"⚠️ ANTI-CLONE: Your output must differ meaningfully from the parent version. "
+            f"The spawner performs a byte-for-byte check — identical files abort the spawn."
+        )
+
+        file_role = self._file_role(fname)
+
+        prompt = f"""You are generating {fname} for Generation {next_gen} of a self-replicating AI coding agent.
+
+{anti_clone}
+
+IMPROVEMENT PLAN (what changed and why):
+{improvement_log[:600]}
+
+FAILURES TO FIX:
+{failure_ctx[:400]}
+
+FILE ROLE: {file_role}
+
+PARENT VERSION (first 400 chars — DO NOT COPY, only use as structural reference):
+{parent_snippet}
+
+REQUIREMENTS:
+- File: {fname}  Generation: {next_gen}
+- Fix the failures described above that this file is responsible for
+- Use GROQ_API_KEY env var (not GEMINI_API_KEY) for the LLM client
+- llm_client must support Groq API (OpenAI-compatible: POST https://api.groq.com/openai/v1/chat/completions)
+- Default model: llama-3.3-70b-versatile
+- Every agent file must own its prompt internally (not rely on external prompt files)
+- Keep the same data contracts (TaskContract, AnalysisSpec, CodeArtifact, etc.)
+
+OUTPUT: Write ONLY the complete Python source code for {fname}.
+Start with the module docstring. No explanation outside the code."""
+
+        response = self.llm_client.call(prompt)
+        return self._extract_code(response, fname)
+
+    def _file_role(self, fname: str) -> str:
+        """One-line description of what each file is responsible for."""
+        roles = {
+            "main.py": "Entry point — loads tasks, runs pipeline, triggers evolution",
+            "config.py": "Configuration — AgentTopologyConfig, LLMConfig, model defaults",
+            "llm_client.py": "LLM API client — Groq (primary) + Gemini fallback, retry logic",
+            "task_manager.py": "Task loading from problem_pool.json",
+            "analysis.py": "Failure analysis — classifies errors, attributes to agents",
+            "evolution_engine.py": "Evolution — designs next generation from failure evidence",
+            "spawner.py": "Spawner — validates, writes, and launches the next generation",
+            "contracts.py": "Data contracts — typed dataclasses between agents",
+            "agent_base.py": "Base class for all specialist agents",
+            "pipeline.py": "AgentPipeline — orchestrates agents per AgentTopologyConfig",
+            "agent_analyst.py": "Analyst agent — decomposes problem into AnalysisSpec",
+            "agent_architect.py": "Architect agent — designs solution as DesignSpec",
+            "agent_coder.py": "Coder agent — generates working Python code; use chain-of-thought",
+            "agent_critic.py": "Critic agent — reviews code against spec (not design intent)",
+            "agent_reviser.py": "Reviser agent — applies Critic's targeted fixes only",
+            "agent_test_writer.py": "TestWriter agent — generates tests from AnalysisSpec ONLY",
+            "agent_debugger.py": "Debugger agent — patches exact failure, no redesign",
+            "agent_clone_inspector.py": "Clone Inspector — detects if offspring files copy parent",
+        }
+        return roles.get(fname, f"Logic file: {fname}")
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _build_failure_context(self, analysis_report: AnalysisReport, parent_config: Config) -> str:
+        """Compact failure summary for use in every per-file prompt."""
+        data = {
+            "pass_rate": f"{analysis_report.pass_rate:.1%}",
+            "passed": analysis_report.passed,
+            "total": analysis_report.total_tasks,
+            "error_breakdown": analysis_report.failure_breakdown,
+            "agent_failure_counts": getattr(analysis_report, "agent_failure_counts", {}),
+            "sample_failures": getattr(analysis_report, "sample_failures", [])[:2],
+            "topology": getattr(parent_config, "topology", None) and
+                parent_config.topology.to_dict(),
+        }
+        return json.dumps(data, indent=2)
+
+    def _load_current_source(self) -> Dict[str, str]:
+        """Load key source files for structural reference (truncated)."""
+        priority = [
+            "agent_coder.py", "agent_analyst.py", "pipeline.py",
+            "config.py", "contracts.py", "llm_client.py",
+        ]
+        source = {}
+        for fname in priority:
+            fpath = self.gen_dir / fname
+            if fpath.exists():
+                try:
+                    full = fpath.read_text(encoding="utf-8")
+                    source[fname] = full[:500]
+                except Exception:
+                    pass
+        logger.info(f"Loaded {len(source)} reference files for evolution context.")
+        return source
+
+    def _extract_code(self, response: str, fname: str) -> str:
+        """
+        Extract Python code from the LLM response.
+        Handles:
+          - Raw code (starts with # or import or \"\"\")
+          - Fenced code blocks (```python ... ```)
+          - BEGIN/END delimiters from old format
+        """
+        # Try BEGIN/END delimiter format
+        m = re.search(
+            r"=== BEGIN " + re.escape(fname) + r" ===\n(.*?)\n=== END " + re.escape(fname) + r" ===",
+            response, re.DOTALL
+        )
+        if m:
+            return m.group(1).strip()
+
+        # Try fenced code block
+        m = re.search(r"```(?:python)?\n(.*?)```", response, re.DOTALL)
+        if m:
+            return m.group(1).strip()
+
+        # Raw code — strip any leading/trailing prose
+        lines = response.splitlines()
+        start = 0
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if (stripped.startswith('"""') or stripped.startswith("'''") or
+                    stripped.startswith("import ") or stripped.startswith("from ") or
+                    stripped.startswith("# ")):
+                start = i
+                break
+        return "\n".join(lines[start:]).strip()

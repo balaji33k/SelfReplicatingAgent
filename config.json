@@ -1,0 +1,7 @@
+{
+  "features": {
+    "lineage_fallback": true,
+    "fallback_threshold_pct": 50,
+    "fallback_reference_gen": 1
+  }
+}

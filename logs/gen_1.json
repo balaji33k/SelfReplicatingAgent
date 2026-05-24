@@ -1,0 +1,212 @@
+[
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_SWE_BENCH-00.py': [Errno 2] No such file or directory\n",
+    "duration": 0.03208780288696289,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_SWE_BENCH-01.py': [Errno 2] No such file or directory\n",
+    "duration": 0.030989646911621094,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_SWE_BENCH-02.py': [Errno 2] No such file or directory\n",
+    "duration": 0.03052997589111328,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_SWE_BENCH-03.py': [Errno 2] No such file or directory\n",
+    "duration": 0.03307533264160156,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_SWE_BENCH-04.py': [Errno 2] No such file or directory\n",
+    "duration": 0.030776500701904297,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_SWE_BENCH-05.py': [Errno 2] No such file or directory\n",
+    "duration": 0.031149625778198242,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_SWE_BENCH-06.py': [Errno 2] No such file or directory\n",
+    "duration": 0.03306007385253906,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_SWE_BENCH-07.py': [Errno 2] No such file or directory\n",
+    "duration": 0.03282642364501953,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_SWE_BENCH-08.py': [Errno 2] No such file or directory\n",
+    "duration": 0.03950357437133789,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_SWE_BENCH-09.py': [Errno 2] No such file or directory\n",
+    "duration": 0.04123711585998535,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_SWE_BENCH-10.py': [Errno 2] No such file or directory\n",
+    "duration": 0.03609633445739746,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_SWE_BENCH-11.py': [Errno 2] No such file or directory\n",
+    "duration": 0.03076648712158203,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_SWE_BENCH-12.py': [Errno 2] No such file or directory\n",
+    "duration": 0.030122041702270508,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_SWE_BENCH-13.py': [Errno 2] No such file or directory\n",
+    "duration": 0.02976703643798828,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_SWE_BENCH-14.py': [Errno 2] No such file or directory\n",
+    "duration": 0.029526233673095703,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_LIVECODE_BENCH-00.py': [Errno 2] No such file or directory\n",
+    "duration": 0.04011392593383789,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_LIVECODE_BENCH-01.py': [Errno 2] No such file or directory\n",
+    "duration": 0.030519962310791016,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_LIVECODE_BENCH-02.py': [Errno 2] No such file or directory\n",
+    "duration": 0.02831435203552246,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_LIVECODE_BENCH-03.py': [Errno 2] No such file or directory\n",
+    "duration": 0.03281426429748535,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_LIVECODE_BENCH-04.py': [Errno 2] No such file or directory\n",
+    "duration": 0.031662702560424805,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_LIVECODE_BENCH-05.py': [Errno 2] No such file or directory\n",
+    "duration": 0.031778573989868164,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_LIVECODE_BENCH-06.py': [Errno 2] No such file or directory\n",
+    "duration": 0.031336307525634766,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_LIVECODE_BENCH-07.py': [Errno 2] No such file or directory\n",
+    "duration": 0.03362154960632324,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_LIVECODE_BENCH-08.py': [Errno 2] No such file or directory\n",
+    "duration": 0.0336151123046875,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_LIVECODE_BENCH-09.py': [Errno 2] No such file or directory\n",
+    "duration": 0.0377349853515625,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_LIVECODE_BENCH-10.py': [Errno 2] No such file or directory\n",
+    "duration": 0.03728199005126953,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_LIVECODE_BENCH-11.py': [Errno 2] No such file or directory\n",
+    "duration": 0.030913352966308594,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_LIVECODE_BENCH-12.py': [Errno 2] No such file or directory\n",
+    "duration": 0.031511783599853516,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_LIVECODE_BENCH-13.py': [Errno 2] No such file or directory\n",
+    "duration": 0.032224178314208984,
+    "timed_out": false
+  },
+  {
+    "success": false,
+    "stdout": "",
+    "stderr": "python: can't open file 'D:\\\\Projects\\\\2ndRunSelfReplicatingAgent\\\\generations\\\\gen_1\\\\generations\\\\gen_1\\\\solution_LIVECODE_BENCH-14.py': [Errno 2] No such file or directory\n",
+    "duration": 0.03416633605957031,
+    "timed_out": false
+  }
+]
