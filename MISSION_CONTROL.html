@@ -16,23 +16,88 @@
     body::before{content:'';position:fixed;inset:0;
       background-image:radial-gradient(circle at 2px 2px,rgba(255,255,255,.04) 1px,transparent 0);
       background-size:36px 36px;pointer-events:none;z-index:0}
-    .shell{display:grid;grid-template-columns:300px 1fr;min-height:100vh;position:relative;z-index:1}
+
+    /* ── Layout ── */
+    .shell{display:grid;grid-template-columns:280px 1fr;min-height:100vh;position:relative;z-index:1}
     .sidebar{border-right:1px solid var(--border);background:rgba(0,0,0,.45);backdrop-filter:blur(20px);
-      padding:28px 20px;display:flex;flex-direction:column;gap:14px;
+      padding:24px 18px;display:flex;flex-direction:column;gap:12px;
       position:sticky;top:0;height:100vh;overflow-y:auto}
-    .main{padding:32px;overflow-y:auto;display:flex;flex-direction:column;gap:24px}
-    .brand{font-size:.95rem;font-weight:800;letter-spacing:3px;text-transform:uppercase;
+    .main{padding:28px;overflow-y:auto;display:flex;flex-direction:column;gap:20px}
+    .brand{font-size:.9rem;font-weight:800;letter-spacing:3px;text-transform:uppercase;
       background:linear-gradient(90deg,var(--cyan),var(--magenta));
-      -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
-    h2{font-size:.65rem;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:12px}
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:2px}
+    h2{font-size:.6rem;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:10px}
     .card{background:var(--card);backdrop-filter:blur(12px);border:1px solid var(--border);
       border-radius:18px;padding:22px}
-    .card-title{font-size:.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:14px}
-    .hb-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .hb-stat{border-left:2px solid var(--border);padding:8px 12px;transition:.3s}
-    .hb-stat:hover{border-left-color:var(--cyan)}
-    .hb-val{font-size:1.7rem;font-weight:800;color:var(--cyan);text-shadow:0 0 14px rgba(0,243,255,.4);line-height:1}
-    .hb-label{font-size:.58rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+    .card-title{font-size:.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:16px}
+
+    /* ── HERO PROGRESS CARD ── */
+    .hero-card{background:linear-gradient(135deg,rgba(0,243,255,.06),rgba(255,0,255,.06));
+      border:1px solid rgba(0,243,255,.2);border-radius:22px;padding:28px;position:relative;overflow:hidden}
+    .hero-card::before{content:'';position:absolute;top:-60px;right:-60px;width:200px;height:200px;
+      border-radius:50%;background:radial-gradient(circle,rgba(0,243,255,.12),transparent 70%);pointer-events:none}
+    .hero-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px}
+    .hero-gen{font-size:2.8rem;font-weight:800;line-height:1;
+      background:linear-gradient(135deg,var(--cyan),var(--magenta));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .hero-gen-label{font-size:.6rem;color:var(--dim);letter-spacing:2px;text-transform:uppercase;margin-top:4px}
+    .hero-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+
+    /* ── Big circular progress ── */
+    .circle-wrap{position:relative;width:110px;height:110px}
+    .circle-wrap svg{transform:rotate(-90deg)}
+    .circle-bg{fill:none;stroke:rgba(255,255,255,.06);stroke-width:8}
+    .circle-fill{fill:none;stroke-width:8;stroke-linecap:round;
+      stroke-dasharray:283;stroke-dashoffset:283;
+      transition:stroke-dashoffset 1s cubic-bezier(.4,0,.2,1)}
+    .circle-center{position:absolute;inset:0;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;text-align:center}
+    .circle-pct{font-size:1.3rem;font-weight:800;color:var(--cyan);line-height:1}
+    .circle-sub{font-size:.5rem;color:var(--dim);letter-spacing:1px;text-transform:uppercase;margin-top:2px}
+
+    /* ── Main progress bar ── */
+    .progress-section{margin-top:4px}
+    .progress-meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+    .progress-label{font-size:.85rem;font-weight:700;color:var(--text)}
+    .progress-count{font-size:1.6rem;font-weight:800;color:var(--cyan);
+      text-shadow:0 0 20px rgba(0,243,255,.5)}
+    .progress-total{font-size:.85rem;color:var(--dim)}
+    .big-bar-track{height:14px;background:rgba(255,255,255,.05);border-radius:10px;
+      overflow:hidden;border:1px solid rgba(255,255,255,.06);position:relative}
+    .big-bar-fill{height:100%;border-radius:10px;position:relative;
+      background:linear-gradient(90deg,var(--cyan),var(--magenta));
+      transition:width 1s cubic-bezier(.4,0,.2,1);
+      box-shadow:0 0 20px rgba(0,243,255,.4)}
+    .big-bar-fill::after{content:'';position:absolute;inset:0;
+      background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.3) 50%,transparent 100%);
+      animation:shimmer 2s infinite}
+    @keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)} }
+    .seg-labels{display:flex;justify-content:space-between;margin-top:6px}
+    .seg-label{font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+
+    /* ── Mini stats row ── */
+    .mini-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}
+    .mini-stat{background:rgba(255,255,255,.03);border:1px solid var(--border);
+      border-radius:12px;padding:12px;text-align:center;transition:.3s}
+    .mini-stat:hover{border-color:var(--cyan);background:rgba(0,243,255,.05)}
+    .mini-val{font-size:1.4rem;font-weight:800;line-height:1}
+    .mini-label{font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+
+    /* ── Live ticker ── */
+    .ticker-wrap{background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:12px;
+      padding:10px 16px;display:flex;align-items:center;gap:10px;margin-top:14px;min-height:40px}
+    .ticker-dot{width:8px;height:8px;border-radius:50%;background:var(--lime);flex-shrink:0;
+      animation:dotpulse 1.2s ease-in-out infinite}
+    .ticker-text{font-family:var(--mono);font-size:.65rem;color:var(--cyan);
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+    /* ── Segment breakdown ── */
+    .seg-bars{display:flex;height:6px;border-radius:4px;overflow:hidden;gap:1px;margin-top:10px}
+    .seg-pass{background:var(--lime);flex-shrink:0;transition:flex .8s ease}
+    .seg-fail{background:var(--red);flex-shrink:0;transition:flex .8s ease}
+    .seg-pend{background:rgba(255,255,255,.08);flex:1}
+
+    /* ── Badges ── */
     .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;
       font-size:.58rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;border:1px solid}
     .badge-running{color:var(--lime);border-color:var(--lime);background:rgba(57,255,20,.08)}
@@ -43,36 +108,55 @@
     .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
     .dot-pulse{animation:dotpulse 1.2s ease-in-out infinite}
     @keyframes dotpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
-    .pbar-wrap{margin-top:12px}
-    .pbar-head{display:flex;justify-content:space-between;font-size:.58rem;color:var(--dim);
-      text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
-    .pbar-track{height:3px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
-    .pbar-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--magenta));
-      transition:width .8s cubic-bezier(.4,0,.2,1);box-shadow:0 0 8px var(--cyan)}
-    .timeline{display:flex;align-items:center;flex-wrap:wrap;padding:6px 0}
+
+    /* ── Timeline ── */
+    .timeline{display:flex;align-items:center;flex-wrap:wrap;padding:6px 0;gap:0}
     .tl-node{display:flex;flex-direction:column;align-items:center;cursor:pointer}
-    .tl-circle{width:46px;height:46px;border-radius:50%;border:2px solid var(--border);
+    .tl-circle{width:52px;height:52px;border-radius:50%;border:2px solid var(--border);
       background:var(--card);display:flex;align-items:center;justify-content:center;
-      font-size:.68rem;font-weight:800;transition:.3s;position:relative}
+      font-size:.68rem;font-weight:800;transition:.3s;position:relative;flex-direction:column;gap:1px}
     .tl-circle:hover,.tl-circle.active{border-color:var(--cyan);box-shadow:0 0 18px rgba(0,243,255,.3)}
     .tl-circle.live{border-color:var(--lime);box-shadow:0 0 18px rgba(57,255,20,.3)}
-    .tl-circle.live::after{content:'';position:absolute;inset:-4px;border-radius:50%;
+    .tl-circle.live::after{content:'';position:absolute;inset:-5px;border-radius:50%;
       border:1px solid var(--lime);opacity:.5;animation:ringpulse 2s infinite}
     @keyframes ringpulse{0%{transform:scale(1);opacity:.5}100%{transform:scale(1.5);opacity:0}}
-    .tl-label{font-size:.54rem;color:var(--dim);margin-top:4px;text-align:center;line-height:1.3}
-    .tl-line{flex:1;height:2px;min-width:20px;background:var(--border);margin-bottom:18px}
+
+    /* ── Spinner ── */
+    .spinner{width:18px;height:18px;border-radius:50%;border:2px solid rgba(57,255,20,.2);
+      border-top-color:var(--lime);animation:spin .8s linear infinite;flex-shrink:0}
+    .spinner-cyan{border-color:rgba(0,243,255,.2);border-top-color:var(--cyan)}
+    .spinner-sm{width:12px;height:12px;border-width:2px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* Spinner inside gen button */
+    .gen-btn-header{display:flex;align-items:center;gap:7px}
+    .tl-label{font-size:.52rem;color:var(--dim);margin-top:5px;text-align:center;line-height:1.3}
+    .tl-pct{font-size:.5rem;color:var(--cyan)}
+    .tl-line{flex:1;height:2px;min-width:16px;background:var(--border);margin-bottom:20px}
     .tl-line.done{background:linear-gradient(90deg,var(--cyan),rgba(0,243,255,.3))}
-    .gen-btn{padding:12px 14px;border-radius:12px;border:1px solid var(--border);
-      background:var(--card);cursor:pointer;transition:.3s}
-    .gen-btn:hover{border-color:var(--cyan);transform:translateX(4px)}
-    .gen-btn.active{border-color:var(--cyan);background:rgba(0,243,255,.12);box-shadow:0 0 20px rgba(0,243,255,.1)}
-    .gen-btn-title{font-size:.72rem;font-weight:700;margin-bottom:2px}
-    .gen-btn-sub{font-size:.58rem;color:var(--dim)}
+
+    /* ── Sidebar gen buttons ── */
+    .gen-btn{padding:10px 12px;border-radius:12px;border:1px solid var(--border);
+      background:var(--card);cursor:pointer;transition:.3s;position:relative;overflow:hidden}
+    .gen-btn::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
+      background:var(--border);transition:.3s}
+    .gen-btn:hover{border-color:var(--cyan);transform:translateX(3px)}
+    .gen-btn:hover::before,.gen-btn.active::before{background:var(--cyan)}
+    .gen-btn.active{border-color:var(--cyan);background:rgba(0,243,255,.08);box-shadow:0 0 20px rgba(0,243,255,.08)}
+    .gen-btn-title{font-size:.7rem;font-weight:700;margin-bottom:3px}
+    .gen-btn-sub{font-size:.56rem;color:var(--dim)}
+    /* mini progress inside sidebar button */
+    .gen-btn-bar{height:2px;background:rgba(255,255,255,.06);border-radius:2px;margin-top:6px;overflow:hidden}
+    .gen-btn-bar-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--magenta));transition:width .8s ease}
+
+    /* ── Gen detail stats ── */
     .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
     .stat{border-left:2px solid var(--border);padding:8px 12px;transition:.3s}
     .stat:hover{border-left-color:var(--cyan)}
     .stat-val{font-size:1.9rem;font-weight:800;color:var(--cyan);text-shadow:0 0 12px rgba(0,243,255,.3);line-height:1}
-    .stat-label{font-size:.54rem;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;margin-top:2px}
+    .stat-label{font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;margin-top:2px}
+
+    /* ── Table ── */
     .filter-bar{display:flex;gap:7px;margin-bottom:12px}
     .filter-btn{padding:4px 11px;border-radius:6px;border:1px solid var(--border);
       background:transparent;color:var(--dim);font-size:.58rem;font-weight:700;
@@ -90,6 +174,16 @@
       text-transform:uppercase;border:1px solid}
     .pass-pill{color:var(--lime);border-color:var(--lime);background:rgba(57,255,20,.08)}
     .fail-pill{color:var(--red);border-color:var(--red);background:rgba(255,49,49,.08)}
+
+    /* ── Breakdown bars ── */
+    .breakdown{display:flex;flex-direction:column;gap:8px}
+    .bd-row{display:flex;align-items:center;gap:10px}
+    .bd-label{font-size:.63rem;font-family:var(--mono);min-width:140px}
+    .bd-track{flex:1;height:5px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden}
+    .bd-fill{height:100%;border-radius:3px;transition:width .8s ease}
+    .bd-count{font-size:.58rem;color:var(--dim);min-width:22px;text-align:right}
+
+    /* ── Matrix ── */
     .matrix-wrap{overflow-x:auto}
     .matrix-table{border-spacing:3px}
     .matrix-table th{font-size:.56rem;padding:5px 8px;white-space:nowrap}
@@ -100,12 +194,8 @@
     .m-new{background:rgba(0,243,255,.2);color:var(--cyan)}
     .m-reg{background:rgba(255,179,0,.2);color:var(--amber)}
     .m-none{background:rgba(255,255,255,.03);color:var(--dim)}
-    .breakdown{display:flex;flex-direction:column;gap:8px}
-    .bd-row{display:flex;align-items:center;gap:10px}
-    .bd-label{font-size:.63rem;font-family:var(--mono);min-width:140px}
-    .bd-track{flex:1;height:5px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden}
-    .bd-fill{height:100%;border-radius:3px;transition:width .8s ease}
-    .bd-count{font-size:.58rem;color:var(--dim);min-width:22px;text-align:right}
+
+    /* ── Evo entry ── */
     .evo-entry{border-left:3px solid var(--border);padding:12px 16px;margin-bottom:14px;
       background:rgba(255,255,255,.02);border-radius:0 10px 10px 0;transition:.3s}
     .evo-entry.improved{border-left-color:var(--lime)}
@@ -126,6 +216,8 @@
     .attr-item:hover{border-color:var(--magenta)}
     .attr-count{font-size:1.4rem;font-weight:800;color:var(--magenta);line-height:1}
     .attr-name{font-size:.56rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+
+    /* ── Drawer ── */
     .overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);
       z-index:999;opacity:0;pointer-events:none;transition:.3s}
     .overlay.show{opacity:1;pointer-events:all}
@@ -140,10 +232,20 @@
       border:1px solid var(--border);color:var(--dim);border-radius:8px;
       padding:5px 11px;cursor:pointer;font-size:.67rem;font-family:var(--font)}
     .close-btn:hover{border-color:var(--red);color:var(--red)}
+
+    /* ── Scrollbar ── */
     ::-webkit-scrollbar{width:4px;height:4px}
     ::-webkit-scrollbar-track{background:transparent}
     ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
     ::-webkit-scrollbar-thumb:hover{background:rgba(0,243,255,.4)}
+
+    /* ── Animated number ── */
+    @keyframes numPop{0%{transform:scale(1.3);opacity:.5}100%{transform:scale(1);opacity:1}}
+    .num-pop{animation:numPop .4s ease}
+
+    /* ── ETA chip ── */
+    .eta-chip{background:rgba(255,179,0,.1);border:1px solid rgba(255,179,0,.3);
+      border-radius:8px;padding:4px 10px;font-size:.58rem;color:var(--amber);font-family:var(--mono)}
   </style>
 </head>
 <body>
@@ -154,36 +256,115 @@
 </div>
 
 <div class="shell">
+  <!-- ═══ SIDEBAR ═══ -->
   <aside class="sidebar">
     <div class="brand">Evolution<br>Control</div>
     <div id="live-badge"></div>
-    <div style="font-size:.56rem;color:var(--dim);margin-top:-6px" id="last-upd-label">Polling…</div>
-    <div style="height:1px;background:var(--border);margin:2px 0"></div>
+    <div style="font-size:.54rem;color:var(--dim);margin-top:-4px" id="last-upd-label">Polling…</div>
+    <div style="height:1px;background:var(--border);margin:4px 0"></div>
     <h2>Generations</h2>
     <div id="gen-nav" style="display:flex;flex-direction:column;gap:8px"></div>
   </aside>
 
+  <!-- ═══ MAIN ═══ -->
   <main class="main">
-    <div class="card" id="heartbeat-card">
-      <div class="card-title">⚡ Live Status</div>
-      <div class="hb-grid" id="hb-stats"></div>
-      <div class="pbar-wrap">
-        <div class="pbar-head"><span id="pbar-label">Tasks</span><span id="pbar-pct">—</span></div>
-        <div class="pbar-track"><div class="pbar-fill" id="pbar-fill" style="width:0%"></div></div>
+
+    <!-- HERO PROGRESS CARD -->
+    <div class="hero-card" id="hero-card">
+      <div class="hero-top">
+        <div>
+          <div class="hero-gen" id="hero-gen-num">Gen 1</div>
+          <div class="hero-gen-label">Active Generation</div>
+          <div style="margin-top:10px" id="hero-badge"></div>
+        </div>
+        <div class="hero-right">
+          <div class="circle-wrap">
+            <svg width="110" height="110" viewBox="0 0 110 110">
+              <circle class="circle-bg" cx="55" cy="55" r="45"/>
+              <circle class="circle-fill" id="circle-fill" cx="55" cy="55" r="45"
+                stroke="url(#cg)" stroke-dashoffset="283"/>
+              <defs>
+                <linearGradient id="cg" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#00f3ff"/>
+                  <stop offset="100%" stop-color="#ff00ff"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            <div class="circle-center">
+              <div class="circle-pct" id="circle-pct">0%</div>
+              <div class="circle-sub">Done</div>
+            </div>
+          </div>
+          <div id="eta-chip"></div>
+        </div>
+      </div>
+
+      <!-- Big progress bar -->
+      <div class="progress-section">
+        <div class="progress-meta">
+          <div class="progress-label">Tasks Completed</div>
+          <div>
+            <span class="progress-count" id="pbar-done">0</span>
+            <span class="progress-total" id="pbar-total"> / 0</span>
+          </div>
+        </div>
+        <div class="big-bar-track">
+          <div class="big-bar-fill" id="big-bar-fill" style="width:0%"></div>
+        </div>
+        <!-- Segmented pass/fail bar -->
+        <div class="seg-bars" id="seg-bars">
+          <div class="seg-pend" style="flex:1"></div>
+        </div>
+        <div class="seg-labels">
+          <span class="seg-label" style="color:var(--lime)" id="seg-pass-label">0 passed</span>
+          <span class="seg-label" style="color:var(--red)" id="seg-fail-label">0 failed</span>
+          <span class="seg-label" id="seg-pend-label">0 pending</span>
+        </div>
+      </div>
+
+      <!-- Live ticker -->
+      <div class="ticker-wrap" id="ticker-wrap">
+        <div class="ticker-dot" id="ticker-dot"></div>
+        <div class="ticker-text" id="ticker-text">Waiting for evolution to start…</div>
+      </div>
+
+      <!-- Mini stats -->
+      <div class="mini-stats">
+        <div class="mini-stat">
+          <div class="mini-val" style="color:var(--lime)" id="ms-passed">0</div>
+          <div class="mini-label">Passed</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-val" style="color:var(--red)" id="ms-failed">0</div>
+          <div class="mini-label">Failed</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-val" style="color:var(--cyan)" id="ms-rate">—</div>
+          <div class="mini-label">Pass Rate</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-val" style="color:var(--amber)" id="ms-gen">1</div>
+          <div class="mini-label">Generation</div>
+        </div>
       </div>
     </div>
 
+    <!-- TIMELINE -->
     <div class="card">
       <div class="card-title">📍 Generation Timeline</div>
       <div class="timeline" id="timeline"></div>
     </div>
 
+    <!-- GEN DETAIL -->
     <div id="gen-detail"></div>
+
   </main>
 </div>
 
 <script>
 var STATE={heartbeat:null,evolutionLog:[],benchmarkMatrix:null,activeGen:null};
+var PREV_TASK='';
+var TASK_START=null;
 var COLORS=['#00f3ff','#ff00ff','#39ff14','#ffb300','#ff3131','#a78bfa','#fb7185'];
 
 async function loadJSON(p){
@@ -198,68 +379,174 @@ async function refresh(){
     loadJSON('data/benchmark_matrix.json')
   ]);
   if(results[0])STATE.heartbeat=results[0];
-  if(results[1])STATE.evolutionLog=results[1];
+  if(results[1])STATE.evolutionLog=Array.isArray(results[1])?results[1]:[];
   if(results[2])STATE.benchmarkMatrix=results[2];
   if(STATE.activeGen===null&&STATE.heartbeat)STATE.activeGen=STATE.heartbeat.active_gen||1;
   renderAll();
   document.getElementById('last-upd-label').textContent='Updated '+new Date().toLocaleTimeString();
 }
 
-function renderAll(){renderHeartbeat();renderSidebarNav();renderTimeline();if(STATE.activeGen!==null)renderGenDetail(STATE.activeGen);}
-
-function renderHeartbeat(){
-  var hb=STATE.heartbeat;if(!hb)return;
-  var map={RUNNING:['badge-running',true],ANALYSING:['badge-spawning',true],
-    SPAWNING:['badge-spawning',true],DONE:['badge-done',false],SPAWN_FAILED:['badge-fail',false]};
-  var info=map[hb.status]||['badge-idle',false];
-  document.getElementById('live-badge').innerHTML=
-    '<span class="badge '+info[0]+'"><span class="dot'+(info[1]?' dot-pulse':'')+'"></span>Gen '+hb.active_gen+' · '+hb.status+'</span>';
-  document.getElementById('hb-stats').innerHTML=
-    '<div class="hb-stat"><div class="hb-val">'+hb.passed_so_far+'</div><div class="hb-label">Passed</div></div>'+
-    '<div class="hb-stat"><div class="hb-val">'+hb.failed_so_far+'</div><div class="hb-label">Failed</div></div>'+
-    '<div class="hb-stat"><div class="hb-val">'+pct(hb.pass_rate_so_far)+'</div><div class="hb-label">Pass Rate</div></div>'+
-    '<div class="hb-stat"><div class="hb-val" style="font-size:.8rem;color:var(--dim)">'+(hb.active_task_id||'—')+'</div><div class="hb-label">Active Task</div></div>';
-  var parts=(hb.progress||'0/0').split('/').map(Number);
-  var done=parts[0],total=parts[1];
-  document.getElementById('pbar-label').textContent=(hb.progress||'—')+' tasks';
-  document.getElementById('pbar-pct').textContent=total?pct(done/total):'—';
-  document.getElementById('pbar-fill').style.width=total?pct(done/total):'0%';
+function renderAll(){
+  renderHero();
+  renderSidebarNav();
+  renderTimeline();
+  if(STATE.activeGen!==null)renderGenDetail(STATE.activeGen);
 }
 
+/* ══ HERO CARD ══ */
+function renderHero(){
+  var hb=STATE.heartbeat;
+  if(!hb){
+    document.getElementById('hero-gen-num').textContent='Gen —';
+    return;
+  }
+
+  // Generation number
+  document.getElementById('hero-gen-num').textContent='Gen '+hb.active_gen;
+  document.getElementById('ms-gen').textContent=hb.active_gen;
+
+  // Badge
+  var map={RUNNING:['badge-running',true,'🟢 Running'],ANALYSING:['badge-spawning',true,'🔍 Analysing'],
+    SPAWNING:['badge-spawning',true,'🚀 Spawning'],DONE:['badge-done',false,'✅ Done'],
+    SPAWN_FAILED:['badge-fail',false,'❌ Spawn Failed']};
+  var info=map[hb.status]||['badge-idle',false,'⏸ Idle'];
+  document.getElementById('hero-badge').innerHTML=
+    '<span class="badge '+info[0]+'"><span class="dot'+(info[1]?' dot-pulse':'')+'"></span>'+info[2]+'</span>';
+  document.getElementById('live-badge').innerHTML=
+    '<span class="badge '+info[0]+'" style="font-size:.52rem"><span class="dot'+(info[1]?' dot-pulse':'')+'"></span>Gen '+hb.active_gen+' · '+hb.status+'</span>';
+
+  // Parse progress
+  var parts=(hb.progress||'0/0').split('/').map(Number);
+  var done=parts[0]||0, total=parts[1]||0;
+  var pct=total?done/total:0;
+  var passed=hb.passed_so_far||0, failed=hb.failed_so_far||0, pending=Math.max(0,total-done);
+
+  // Big bar
+  document.getElementById('pbar-done').textContent=done;
+  document.getElementById('pbar-total').textContent=' / '+total;
+  document.getElementById('big-bar-fill').style.width=pct2str(pct);
+
+  // Segmented bar
+  if(total>0){
+    var pPct=(passed/total*100).toFixed(1)+'%';
+    var fPct=(failed/total*100).toFixed(1)+'%';
+    document.getElementById('seg-bars').innerHTML=
+      '<div class="seg-pass" style="flex:'+passed+'"></div>'+
+      '<div class="seg-fail" style="flex:'+failed+'"></div>'+
+      '<div class="seg-pend" style="flex:'+pending+'"></div>';
+  }
+  document.getElementById('seg-pass-label').textContent=passed+' passed';
+  document.getElementById('seg-fail-label').textContent=failed+' failed';
+  document.getElementById('seg-pend-label').textContent=pending+' pending';
+
+  // Circular progress
+  var circ=document.getElementById('circle-fill');
+  var offset=283-(283*pct);
+  circ.style.strokeDashoffset=offset;
+  document.getElementById('circle-pct').textContent=total?Math.round(pct*100)+'%':'0%';
+
+  // Mini stats
+  document.getElementById('ms-passed').textContent=passed;
+  document.getElementById('ms-failed').textContent=failed;
+  document.getElementById('ms-rate').textContent=total?Math.round(pct*100)+'%':'—';
+
+  // ETA chip
+  var etaEl=document.getElementById('eta-chip');
+  if(total>0&&done>0&&hb.status==='RUNNING'){
+    if(!TASK_START)TASK_START=Date.now();
+    var elapsed=(Date.now()-TASK_START)/1000;
+    var rate=done/elapsed; // tasks per sec
+    var remaining=pending/rate;
+    if(remaining>0&&remaining<86400){
+      var m=Math.floor(remaining/60), s=Math.round(remaining%60);
+      etaEl.innerHTML='<div class="eta-chip">⏱ ETA ~'+m+'m '+s+'s</div>';
+    } else { etaEl.innerHTML=''; }
+  } else { etaEl.innerHTML=''; if(done===0)TASK_START=null; }
+
+  // Ticker
+  var taskId=hb.active_task_id||'';
+  var tickerDot=document.getElementById('ticker-dot');
+  var tickerText=document.getElementById('ticker-text');
+  if(hb.status==='RUNNING'&&taskId){
+    if(taskId!==PREV_TASK){PREV_TASK=taskId;}
+    tickerDot.style.background='var(--lime)';
+    tickerText.style.color='var(--cyan)';
+    tickerText.textContent='▶ Solving: '+taskId;
+  } else if(hb.status==='ANALYSING'){
+    tickerDot.style.background='var(--amber)';
+    tickerText.style.color='var(--amber)';
+    tickerText.textContent='🔍 Analysing results — preparing Gen '+(hb.active_gen+1)+' spawn…';
+  } else if(hb.status==='SPAWNING'){
+    tickerDot.style.background='var(--magenta)';
+    tickerText.style.color='var(--magenta)';
+    tickerText.textContent='🚀 Spawning Generation '+(hb.active_gen+1)+'…';
+  } else if(hb.status==='DONE'){
+    tickerDot.style.background='var(--cyan)';
+    tickerText.style.color='var(--cyan)';
+    tickerText.textContent='✅ Generation '+hb.active_gen+' complete — '+passed+' passed, '+failed+' failed';
+  } else {
+    tickerDot.style.background='var(--dim)';
+    tickerText.style.color='var(--dim)';
+    tickerText.textContent='Waiting for evolution to start…';
+  }
+}
+
+/* ══ SIDEBAR NAV ══ */
 function renderSidebarNav(){
   var gens=getKnownGens(),hb=STATE.heartbeat;
   document.getElementById('gen-nav').innerHTML=gens.map(function(g){
     var live=hb&&hb.active_gen===g&&hb.status==='RUNNING';
     var e=getEvoEntry(g);
     var pr=e?pct(e.pass_rate_actual):(live?'Running…':'—');
+    var barW=e?(e.pass_rate_actual*100).toFixed(1)+'%':(live&&hb?pct2str(hb.pass_rate_so_far):'0%');
     return '<div class="gen-btn'+(STATE.activeGen===g?' active':'')+'" onclick="selectGen('+g+')">'+
-      '<div class="gen-btn-title">Generation '+g+(live?' 🟢':'')+' </div>'+
-      '<div class="gen-btn-sub">Pass rate: '+pr+'</div></div>';
+      '<div class="gen-btn-header">'+
+        (live?'<div class="spinner spinner-sm"></div>':'<span style="font-size:.8rem">'+(e?'✅':'⬜')+'</span>')+
+        '<div class="gen-btn-title">Generation '+g+'</div>'+
+      '</div>'+
+      '<div class="gen-btn-sub">Pass rate: '+pr+'</div>'+
+      '<div class="gen-btn-bar"><div class="gen-btn-bar-fill" style="width:'+barW+'"></div></div>'+
+      '</div>';
   }).join('');
 }
 
+/* ══ TIMELINE ══ */
 function renderTimeline(){
   var gens=getKnownGens(),hb=STATE.heartbeat;
   var parts=[];
   gens.forEach(function(g,i){
     var e=getEvoEntry(g);
-    var live=hb&&hb.active_gen===g&&hb.status==='RUNNING';
+    var live=hb&&hb.active_gen===g&&(hb.status==='RUNNING'||hb.status==='ANALYSING');
     var pr=e?pct(e.pass_rate_actual):(live?'…':'?');
     var cls=live?'live':(STATE.activeGen===g?'active':'');
-    parts.push('<div class="tl-node" onclick="selectGen('+g+')"><div class="tl-circle '+cls+'">G'+g+'</div><div class="tl-label">'+pr+'</div></div>');
+    // mini progress ring offset for timeline circle
+    var prog=live&&hb?(hb.progress||'0/0').split('/').map(Number):null;
+    var progStr=prog&&prog[1]?prog[0]+'/'+prog[1]:'';
+    parts.push(
+      '<div class="tl-node" onclick="selectGen('+g+')">'+
+      '<div class="tl-circle '+cls+'" style="'+(live?'border-color:var(--lime)':'')+'">' +
+        (live
+          ? '<div class="spinner" style="width:22px;height:22px"></div>'
+          : '<span>G'+g+'</span>'
+        )+
+        (progStr?'<span style="font-size:.42rem;color:var(--lime)">'+progStr+'</span>':'')+
+      '</div>'+
+      '<div class="tl-label">'+(live?'<span style="color:var(--lime)">G'+g+' live</span>':pr)+'</div>'+
+      '</div>'
+    );
     if(i<gens.length-1)parts.push('<div class="tl-line'+(e?' done':'')+'"></div>');
   });
   if(hb&&hb.status==='SPAWNING')
-    parts.push('<div class="tl-line"></div><div class="tl-node"><div class="tl-circle" style="border-style:dashed">G'+(hb.active_gen+1)+'</div><div class="tl-label">Spawning…</div></div>');
+    parts.push('<div class="tl-line"></div><div class="tl-node"><div class="tl-circle" style="border-style:dashed;font-size:.56rem">G'+(hb.active_gen+1)+'<br><span style="font-size:.42rem;color:var(--amber)">spawning</span></div><div class="tl-label">—</div></div>');
   document.getElementById('timeline').innerHTML=parts.join('');
 }
 
+/* ══ GEN DETAIL ══ */
 function renderGenDetail(gen){
   var e=getEvoEntry(gen),hb=STATE.heartbeat,matrix=STATE.benchmarkMatrix;
-  var live=hb&&hb.active_gen===gen&&hb.status==='RUNNING';
+  var live=hb&&hb.active_gen===gen&&(hb.status==='RUNNING'||hb.status==='ANALYSING');
   var html='';
 
-  // Stats
   if(e){
     var passed=e.passed||0,total=e.total||0,failed=total-passed;
     var delta=e.improvement_delta;
@@ -272,19 +559,24 @@ function renderGenDetail(gen){
       '<div class="stat"><div class="stat-val">'+pct(e.pass_rate_actual)+'</div><div class="stat-label">Pass Rate</div></div>'+
       '<div class="stat"><div class="stat-val" style="color:var(--lime)">'+passed+'</div><div class="stat-label">Passed</div></div>'+
       '<div class="stat"><div class="stat-val" style="color:var(--red)">'+failed+'</div><div class="stat-label">Failed</div></div>'+
-      '<div class="stat"><div class="stat-val" style="font-size:.95rem;padding-top:8px">'+dHtml+'</div><div class="stat-label">vs Parent</div></div>'+
+      '<div class="stat"><div class="stat-val" style="font-size:.9rem;padding-top:8px">'+dHtml+'</div><div class="stat-label">vs Parent</div></div>'+
       '</div></div>';
   } else if(live){
-    html+='<div class="card"><div class="card-title">Generation '+gen+' — Live</div>'+
-      '<div class="stat-grid">'+
-      '<div class="stat"><div class="stat-val">'+pct(hb.pass_rate_so_far)+'</div><div class="stat-label">Pass Rate So Far</div></div>'+
+    var parts2=(hb.progress||'0/0').split('/').map(Number);
+    var d2=parts2[0]||0,t2=parts2[1]||0;
+    var barW2=t2?pct2str(d2/t2):'0%';
+    html+='<div class="card"><div class="card-title">Generation '+gen+' — Live Progress</div>'+
+      '<div class="stat-grid" style="margin-bottom:16px">'+
+      '<div class="stat"><div class="stat-val">'+pct(hb.pass_rate_so_far)+'</div><div class="stat-label">Pass Rate</div></div>'+
       '<div class="stat"><div class="stat-val" style="color:var(--lime)">'+hb.passed_so_far+'</div><div class="stat-label">Passed</div></div>'+
       '<div class="stat"><div class="stat-val" style="color:var(--red)">'+hb.failed_so_far+'</div><div class="stat-label">Failed</div></div>'+
-      '<div class="stat"><div class="stat-val" style="font-size:.85rem;color:var(--dim)">'+hb.progress+'</div><div class="stat-label">Progress</div></div>'+
-      '</div></div>';
+      '<div class="stat"><div class="stat-val" style="font-size:.95rem;color:var(--amber)">'+hb.progress+'</div><div class="stat-label">Progress</div></div>'+
+      '</div>'+
+      '<div style="font-size:.58rem;color:var(--dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Task Progress</div>'+
+      '<div class="big-bar-track"><div class="big-bar-fill" style="width:'+barW2+'"></div></div>'+
+      '</div>';
   }
 
-  // Failure breakdown
   if(e&&e.failure_breakdown&&Object.keys(e.failure_breakdown).length){
     var bd=e.failure_breakdown,maxV=Math.max.apply(null,Object.values(bd));
     var bars=Object.entries(bd).sort(function(a,b){return b[1]-a[1];}).map(function(kv,i){
@@ -296,14 +588,12 @@ function renderGenDetail(gen){
     html+='<div class="card"><div class="card-title">Failure Breakdown</div><div class="breakdown">'+bars+'</div></div>';
   }
 
-  // Agent attribution
   if(e&&e.agent_failure_counts&&Object.keys(e.agent_failure_counts).length){
     var items=Object.entries(e.agent_failure_counts).sort(function(a,b){return b[1]-a[1];})
       .map(function(kv){return '<div class="attr-item"><div class="attr-count">'+kv[1]+'</div><div class="attr-name">'+kv[0]+'</div></div>';}).join('');
     html+='<div class="card"><div class="card-title">Agent Failure Attribution</div><div class="attr-grid">'+items+'</div></div>';
   }
 
-  // Benchmark results table
   if(e&&e.task_results&&e.task_results.length){
     html+='<div class="card"><div class="card-title">Benchmark Results — Gen '+gen+'</div>'+
       '<div class="filter-bar">'+
@@ -315,10 +605,8 @@ function renderGenDetail(gen){
       '<tbody id="results-body-'+gen+'">'+renderRows(e.task_results,'all',gen)+'</tbody></table></div>';
   }
 
-  // Cross-gen matrix
   if(matrix&&matrix.matrix&&matrix.gens&&matrix.gens.length>1)html+=renderMatrix(matrix,gen);
 
-  // Evolution entry
   if(e){
     html+='<div class="card"><div class="card-title">Evolution Entry: Gen '+e.from_gen+' → '+e.to_gen+'</div>'+renderEvoEntry(e)+'</div>';
   }
@@ -330,15 +618,15 @@ function renderRows(rows,filter,gen){
   var out=rows.filter(function(r){return filter==='all'||r.status===filter;})
     .map(function(r){
       var pass=r.status==='pass';
-      var agents=(r.agents_used||[]).join(' →')||'—';
+      var agents=(r.agents_used||[]).join(' → ')||'—';
       var safe=JSON.stringify(r).replace(/"/g,'&quot;');
       return '<tr onclick="openDrawer('+safe+','+gen+')">'+
         '<td>'+r.task_id+'</td>'+
         '<td><span class="pill '+(pass?'pass-pill':'fail-pill')+'">'+(pass?'PASS':'FAIL')+'</span></td>'+
-        '<td style="color:'+(pass?'var(--dim)':'var(--red)')+'">'+( r.error_type||'—')+'</td>'+
+        '<td style="color:'+(pass?'var(--dim)':'var(--red))'"+'">'+( r.error_type||'—')+'</td>'+
         '<td style="color:var(--dim);font-size:.6rem">'+agents+'</td></tr>';
     }).join('');
-  return out||'<tr><td colspan="4" style="color:var(--dim);text-align:center;padding:18px">No results</td></tr>';
+  return out||'<tr><td colspan="4" style="color:var(--dim);text-align:center;padding:18px">No results yet</td></tr>';
 }
 
 function filterTable(btn,filter,gen){
@@ -373,7 +661,7 @@ function renderMatrix(matrix,activeGen){
 function renderEvoEntry(e){
   var delta=e.improvement_delta;
   var dStr=delta===null||delta===undefined
-    ?'<span class="delta-pend">Predicted result pending</span>'
+    ?'<span class="delta-pend">Pending next gen</span>'
     :delta>=0?'<span class="delta-pos">▲ '+pct(delta)+' improvement</span>'
             :'<span class="delta-neg">▼ '+pct(Math.abs(delta))+' regression</span>';
   var changes=(e.topology_changes||[]).map(function(c){return '<span class="change-tag">'+c+'</span>';}).join('');
@@ -382,7 +670,7 @@ function renderEvoEntry(e){
   if(orig.verdict){
     var bClass=orig.verdict==='ORIGINAL'?'pass-pill':orig.verdict==='NEAR_CLONE'?'delta-pend':'fail-pill';
     var scoreStr=typeof orig.originality_score==='number'?(' '+Math.round(orig.originality_score*100)+'% original'):'';
-    origBadge='<span class="pill '+bClass+'" title="'+(orig.llm_assessment||'').slice(0,120)+'">🔬 '+orig.verdict+scoreStr+'</span> ';
+    origBadge='<span class="pill '+bClass+'">🔬 '+orig.verdict+scoreStr+'</span> ';
   }
   return '<div class="evo-header"><div class="evo-title">Gen '+e.from_gen+' → '+e.to_gen+'</div><div>'+dStr+'</div></div>'+
     '<div class="evo-meta">'+origBadge+(e.timestamp||'').slice(0,19).replace('T',' ')+' · '+pct(e.pass_rate_actual)+' pass rate</div>'+
@@ -397,7 +685,7 @@ function openDrawer(row,gen){
     '<div style="font-size:.67rem;color:var(--dim);margin-bottom:20px">Generation '+gen+
     ' · <span class="pill '+(pass?'pass-pill':'fail-pill')+'">'+(pass?'PASS':'FAIL')+'</span></div>'+
     '<h3 style="font-size:.65rem;color:var(--dim);margin-bottom:6px">AGENTS USED</h3>'+
-    '<p style="font-size:.72rem;margin-bottom:14px">'+(( row.agents_used||[]).join(' →')||'—')+'</p>'+
+    '<p style="font-size:.72rem;margin-bottom:14px">'+((row.agents_used||[]).join(' → ')||'—')+'</p>'+
     '<h3 style="font-size:.65rem;color:var(--dim);margin-bottom:6px">ERROR</h3>'+
     '<p style="font-size:.72rem;margin-bottom:14px;color:'+(pass?'var(--lime)':'var(--red)')+'">'+( row.error_type||'None')+'</p>'+
     '<h3 style="font-size:.65rem;color:var(--dim);margin-bottom:6px">CYCLES</h3>'+
@@ -405,14 +693,13 @@ function openDrawer(row,gen){
   document.getElementById('drawer').classList.add('open');
   document.getElementById('overlay').classList.add('show');
 }
-
 function closeDrawer(){
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('overlay').classList.remove('show');
 }
 
 function pct(v){if(v===null||v===undefined)return '—';return (v*100).toFixed(1)+'%';}
-
+function pct2str(v){return (v*100).toFixed(1)+'%';}
 function getKnownGens(){
   var s=new Set();
   STATE.evolutionLog.forEach(function(e){s.add(e.from_gen);s.add(e.to_gen);});
@@ -421,7 +708,6 @@ function getKnownGens(){
   if(s.size===0)s.add(1);
   return Array.from(s).sort(function(a,b){return a-b;});
 }
-
 function getEvoEntry(gen){return STATE.evolutionLog.find(function(e){return e.from_gen===gen;})||null;}
 function selectGen(gen){STATE.activeGen=gen;renderAll();}
 

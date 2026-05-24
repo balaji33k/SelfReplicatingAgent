@@ -1,0 +1,24 @@
+{
+  "id": "LCB-013",
+  "difficulty": "Hard",
+  "title": "Bus Routes",
+  "problem_statement": "You are given an array routes representing bus routes where routes[i] is a bus route that the ith bus repeats forever. You will start at the bus stop source and want to reach bus stop target. Return the least number of buses you must take to reach the target, or -1 if it is impossible. Use BFS on routes (not stops).",
+  "test_cases": [
+    {
+      "input": "routes=[[1,2,7],[3,6,7]], source=1, target=6",
+      "expected": "2"
+    },
+    {
+      "input": "routes=[[7,12],[4,5,15],[6]], source=15, target=12",
+      "expected": "-1"
+    },
+    {
+      "input": "routes=[[1,2]], source=1, target=2",
+      "expected": "1"
+    },
+    {
+      "input": "routes=[[1]], source=1, target=1",
+      "expected": "0"
+    }
+  ]
+}

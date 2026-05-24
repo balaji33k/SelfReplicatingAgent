@@ -1,0 +1,16 @@
+{
+  "id": "LCB-007",
+  "difficulty": "Hard",
+  "title": "Word Ladder II",
+  "problem_statement": "Given two words beginWord and endWord, and a word list, find all shortest transformation sequences from beginWord to endWord such that each word differs by exactly one letter and each intermediate word is in the word list. Return all such sequences or an empty list if none exists.",
+  "test_cases": [
+    {
+      "input": "beginWord='hit', endWord='cog', wordList=['hot','dot','dog','lot','log','cog']",
+      "expected": "[['hit','hot','dot','dog','cog'],['hit','hot','lot','log','cog']]"
+    },
+    {
+      "input": "beginWord='hit', endWord='cog', wordList=['hot','dot','dog','lot','log']",
+      "expected": "[]"
+    }
+  ]
+}

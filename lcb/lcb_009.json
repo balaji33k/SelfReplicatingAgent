@@ -1,0 +1,24 @@
+{
+  "id": "LCB-009",
+  "difficulty": "Hard",
+  "title": "Find Median from Data Stream",
+  "problem_statement": "Implement the MedianFinder class that supports two operations: addNum(num) \u2014 adds an integer num to the data structure, findMedian() \u2014 returns the median of all elements so far. Use two heaps (max-heap + min-heap) for O(log n) add and O(1) median.",
+  "test_cases": [
+    {
+      "input": "addNum(1); addNum(2); findMedian()",
+      "expected": "1.5"
+    },
+    {
+      "input": "addNum(1); addNum(2); addNum(3); findMedian()",
+      "expected": "2.0"
+    },
+    {
+      "input": "addNum(6); findMedian(); addNum(10); findMedian()",
+      "expected": "6.0, 8.0"
+    },
+    {
+      "input": "addNum(-1); addNum(-2); addNum(-3); findMedian()",
+      "expected": "-2.0"
+    }
+  ]
+}

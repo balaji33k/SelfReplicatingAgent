@@ -1,0 +1,24 @@
+{
+  "id": "LCB-006",
+  "difficulty": "Hard",
+  "title": "Minimum Window Substring",
+  "problem_statement": "Given two strings s and t, return the minimum window substring of s such that every character in t (including duplicates) is included in the window. If there is no such substring, return empty string. Solve in O(|s| + |t|) using sliding window with frequency maps.",
+  "test_cases": [
+    {
+      "input": "s='ADOBECODEBANC', t='ABC'",
+      "expected": "'BANC'"
+    },
+    {
+      "input": "s='a', t='a'",
+      "expected": "'a'"
+    },
+    {
+      "input": "s='a', t='aa'",
+      "expected": "''"
+    },
+    {
+      "input": "s='aa', t='aa'",
+      "expected": "'aa'"
+    }
+  ]
+}

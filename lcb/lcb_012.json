@@ -1,0 +1,16 @@
+{
+  "id": "LCB-012",
+  "difficulty": "Hard",
+  "title": "Word Search II",
+  "problem_statement": "Given an m x n board of characters and a list of strings words, return all words on the board. Each word must be constructed from letters of sequentially adjacent cells (horizontally or vertically). The same letter cell may not be used more than once in a word. Use a Trie + DFS backtracking approach.",
+  "test_cases": [
+    {
+      "input": "board=[['o','a','a','n'],['e','t','a','e'],['i','h','k','r'],['i','f','l','v']], words=['oath','pea','eat','rain']",
+      "expected": "['eat','oath']"
+    },
+    {
+      "input": "board=[['a','b'],['c','d']], words=['abcd']",
+      "expected": "[]"
+    }
+  ]
+}

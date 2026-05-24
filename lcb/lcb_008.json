@@ -1,0 +1,24 @@
+{
+  "id": "LCB-008",
+  "difficulty": "Hard",
+  "title": "Serialize and Deserialize Binary Tree",
+  "problem_statement": "Design an algorithm to serialize and deserialize a binary tree. Serialization is the process of converting a data structure into a sequence of bits so that it can be stored or transmitted. The encoded string should be decodable back to the original tree structure.",
+  "test_cases": [
+    {
+      "input": "root=[1,2,3,null,null,4,5]",
+      "expected": "deserialize(serialize(root)) == root"
+    },
+    {
+      "input": "root=[]",
+      "expected": "deserialize(serialize(None)) == None"
+    },
+    {
+      "input": "root=[1]",
+      "expected": "deserialize(serialize([1])).val == 1"
+    },
+    {
+      "input": "root=[1,2]",
+      "expected": "correct left child preserved"
+    }
+  ]
+}

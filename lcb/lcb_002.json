@@ -1,0 +1,24 @@
+{
+  "id": "LCB-002",
+  "difficulty": "Hard",
+  "title": "Regular Expression Matching",
+  "problem_statement": "Given an input string s and a pattern p, implement regular expression matching with support for '.' and '*'. '.' matches any single character. '*' matches zero or more of the preceding element. The matching should cover the entire input string (not partial).",
+  "test_cases": [
+    {
+      "input": "s='aa', p='a'",
+      "expected": "False"
+    },
+    {
+      "input": "s='aa', p='a*'",
+      "expected": "True"
+    },
+    {
+      "input": "s='ab', p='.*'",
+      "expected": "True"
+    },
+    {
+      "input": "s='aab', p='c*a*b'",
+      "expected": "True"
+    }
+  ]
+}

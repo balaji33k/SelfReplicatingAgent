@@ -1,0 +1,24 @@
+{
+  "id": "LCB-010",
+  "difficulty": "Hard",
+  "title": "Alien Dictionary",
+  "problem_statement": "There is a new alien language that uses the English alphabet. However, the order of the letters is unknown. You are given a list of strings words from the alien language's dictionary where words are sorted lexicographically by the rules of this language. Derive the order of letters in this language. Return any valid ordering or '' if invalid.",
+  "test_cases": [
+    {
+      "input": "words=['wrt','wrf','er','ett','rftt']",
+      "expected": "'wertf'"
+    },
+    {
+      "input": "words=['z','x']",
+      "expected": "'zx'"
+    },
+    {
+      "input": "words=['z','x','z']",
+      "expected": "'' (cycle)"
+    },
+    {
+      "input": "words=['abc','ab']",
+      "expected": "'' (invalid prefix order)"
+    }
+  ]
+}

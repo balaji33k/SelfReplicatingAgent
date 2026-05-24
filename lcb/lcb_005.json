@@ -1,0 +1,24 @@
+{
+  "id": "LCB-005",
+  "difficulty": "Hard",
+  "title": "Sliding Window Maximum",
+  "problem_statement": "You are given an array of integers nums and an integer k. There is a sliding window of size k which moves from left to right. Return the max value in each window position. Solve in O(n) using a monotonic deque.",
+  "test_cases": [
+    {
+      "input": "nums=[1,3,-1,-3,5,3,6,7], k=3",
+      "expected": "[3,3,5,5,6,7]"
+    },
+    {
+      "input": "nums=[1], k=1",
+      "expected": "[1]"
+    },
+    {
+      "input": "nums=[1,-1], k=1",
+      "expected": "[1,-1]"
+    },
+    {
+      "input": "nums=[9,11], k=2",
+      "expected": "[11]"
+    }
+  ]
+}
