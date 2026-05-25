@@ -149,6 +149,20 @@
     .gen-btn-bar{height:2px;background:rgba(255,255,255,.06);border-radius:2px;margin-top:6px;overflow:hidden}
     .gen-btn-bar-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--magenta));transition:width .8s ease}
 
+    /* ── Sidebar task list ── */
+    .sb-task-list{display:flex;flex-direction:column;gap:1px;margin-top:8px;
+      max-height:320px;overflow-y:auto;border-top:1px solid var(--border);padding-top:6px}
+    .sb-task-row{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px;
+      font-size:.6rem;font-family:var(--mono)}
+    .sb-task-row.t-run{background:rgba(0,243,255,.08);border:1px solid rgba(0,243,255,.2)}
+    .sb-task-row.t-pass{opacity:.55}
+    .sb-task-row.t-fail{background:rgba(255,49,49,.07);cursor:pointer}
+    .sb-task-row.t-fail:hover{background:rgba(255,49,49,.15)}
+    .sb-task-row.t-pend{opacity:.2}
+    .sb-task-icon{width:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+    .sb-task-id{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .sb-task-err{font-size:.54rem;color:var(--red);flex-shrink:0;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
     /* ── Gen detail stats ── */
     .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
     .stat{border-left:2px solid var(--border);padding:8px 12px;transition:.3s}
@@ -693,13 +707,56 @@ function renderSidebarNav(){
     var e=getEvoEntry(g);
     var pr=e?pct(e.pass_rate_actual):(live?'Running…':'—');
     var barW=e?(e.pass_rate_actual*100).toFixed(1)+'%':(live&&hb?pct2str(hb.pass_rate_so_far):'0%');
-    return '<div class="gen-btn'+(STATE.activeGen===g?' active':'')+'" onclick="selectGen('+g+')">'+
-      '<div class="gen-btn-header">'+
+    var activeTid=(live&&hb)?hb.active_task_id:'';
+
+    // Build sidebar task list
+    var progress=STATE.genProgress[g]||null;
+    var taskListHtml='';
+    var taskList=[],resultsMap={};
+    if(progress&&progress.task_list&&progress.task_list.length){
+      taskList=progress.task_list;
+      Object.keys(progress.results||{}).forEach(function(tid){resultsMap[tid]=progress.results[tid];});
+    } else if(e&&e.task_results&&e.task_results.length){
+      taskList=e.task_results.map(function(r){return r.task_id;});
+      e.task_results.forEach(function(r){resultsMap[r.task_id]=r;});
+    }
+    if(taskList.length){
+      var rows=taskList.map(function(tid){
+        var r=resultsMap[tid];
+        var isActive=tid===activeTid;
+        var icon,cls;
+        if(isActive){
+          icon='<div class="spinner spinner-cyan" style="width:9px;height:9px"></div>';cls='t-run';
+        } else if(r){
+          var pass=(r.status==='pass'||r.success===true);
+          if(pass){icon='<span style="color:var(--lime);font-size:.65rem">✓</span>';cls='t-pass';}
+          else{icon='<span style="color:var(--red);font-size:.65rem">✗</span>';cls='t-fail';}
+        } else {
+          icon='<span style="opacity:.3">·</span>';cls='t-pend';
+        }
+        var errHtml=(r&&cls==='t-fail'&&r.error_type)?'<span class="sb-task-err">'+r.error_type+'</span>':'';
+        var clickHtml='';
+        if(r&&cls==='t-fail'){
+          var safeRow=JSON.stringify({task_id:tid,status:'fail',error_type:r.error_type||'',agents_used:r.agents_used||[],cycles:r.cycles||{}}).replace(/"/g,'&quot;');
+          clickHtml=' onclick="openDrawer('+safeRow+','+g+')"';
+        }
+        return '<div class="sb-task-row '+cls+'"'+clickHtml+'>'+
+          '<div class="sb-task-icon">'+icon+'</div>'+
+          '<div class="sb-task-id">'+tid+'</div>'+
+          errHtml+
+        '</div>';
+      }).join('');
+      taskListHtml='<div class="sb-task-list">'+rows+'</div>';
+    }
+
+    return '<div class="gen-btn'+(STATE.activeGen===g?' active':'')+'" style="cursor:default">'+
+      '<div class="gen-btn-header" style="cursor:pointer" onclick="selectGen('+g+')">'+
         (live?'<div class="spinner spinner-sm"></div>':'<span style="font-size:.8rem">'+(e?'✅':'⬜')+'</span>')+
         '<div class="gen-btn-title">Generation '+g+'</div>'+
       '</div>'+
-      '<div class="gen-btn-sub">Pass rate: '+pr+'</div>'+
-      '<div class="gen-btn-bar"><div class="gen-btn-bar-fill" style="width:'+barW+'"></div></div>'+
+      '<div class="gen-btn-sub" style="cursor:pointer" onclick="selectGen('+g+')">Pass rate: '+pr+'</div>'+
+      '<div class="gen-btn-bar" style="cursor:pointer" onclick="selectGen('+g+')"><div class="gen-btn-bar-fill" style="width:'+barW+'"></div></div>'+
+      taskListHtml+
       '</div>';
   }).join('');
 }
