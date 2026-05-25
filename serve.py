@@ -35,13 +35,13 @@ _current_proc: subprocess.Popen = None  # current gen_1 subprocess (so we can ki
 _proc_lock = threading.Lock()
 
 # Known Groq free-tier models shown in the dashboard selector
+# Only models confirmed working on this Groq free-tier account.
+# deepseek-r1-distill-llama-70b, deepseek-r1-distill-qwen-32b, qwen-qwq-32b
+# all return 404 on this account — removed to avoid misleading the user.
 GROQ_FREE_MODELS = [
     {"id": "meta-llama/llama-4-scout-17b-16e-instruct",  "name": "Llama 4 Scout 17B",       "tpd": "500k", "tpm": "30k"},
     {"id": "llama-3.1-8b-instant",                        "name": "Llama 3.1 8B Instant",    "tpd": "500k", "tpm": "20k"},
     {"id": "llama-3.3-70b-versatile",                     "name": "Llama 3.3 70B Versatile", "tpd": "100k", "tpm": "12k"},
-    {"id": "deepseek-r1-distill-llama-70b",               "name": "DeepSeek R1 Llama 70B",   "tpd": "500k", "tpm": "30k"},
-    {"id": "deepseek-r1-distill-qwen-32b",                "name": "DeepSeek R1 Qwen 32B",    "tpd": "500k", "tpm": "30k"},
-    {"id": "qwen-qwq-32b",                                "name": "Qwen QwQ 32B",            "tpd": "500k", "tpm": "30k"},
 ]
 
 
