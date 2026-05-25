@@ -288,6 +288,17 @@ def run_generation(gen_config: Config, generation_number: int):
                          passed_count, failed_count, "", [])
         sys.exit(1)
 
+    finally:
+        # Persist all generation artifacts to HuggingFace Dataset repo
+        # so they survive Space restarts and are browsable from HF.
+        # Non-fatal: evolution is already done at this point.
+        try:
+            from persist import upload_generation
+            logger.info(f"[persist] Uploading Gen {generation_number} to HuggingFace Dataset…")
+            upload_generation(generation_number, current_gen_dir)
+        except Exception as e:
+            logger.warning(f"[persist] Upload skipped: {e}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
