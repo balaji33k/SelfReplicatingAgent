@@ -439,11 +439,10 @@
     <div class="brand">Evolution<br>Control</div>
     <div id="live-badge"></div>
     <div style="font-size:.54rem;color:var(--dim);margin-top:-4px" id="last-upd-label">Polling…</div>
-    <div id="run-started-label" style="display:none;margin-top:4px;padding:5px 8px;
-      border-radius:7px;border:1px solid rgba(57,255,20,.25);background:rgba(57,255,20,.06)">
-      <div style="font-size:.5rem;color:#64748b;text-transform:uppercase;letter-spacing:1px">Run started</div>
-      <div id="run-started-time" style="font-size:.68rem;color:#39ff14;font-weight:700;font-family:monospace"></div>
-      <div id="run-started-ago" style="font-size:.5rem;color:#64748b"></div>
+    <div id="run-state-banner" style="display:none;margin-top:6px;padding:8px 10px;
+      border-radius:8px;border:1px solid rgba(255,255,255,.1)">
+      <div id="run-state-icon" style="font-size:.85rem;font-weight:800;letter-spacing:.5px"></div>
+      <div id="run-state-sub" style="font-size:.52rem;color:#94a3b8;margin-top:2px"></div>
     </div>
     <div style="height:1px;background:var(--border);margin:4px 0"></div>
     <h2>Generations</h2>
@@ -937,20 +936,64 @@ function renderAll(){
 }
 
 function renderRunInfo(){
-  var el=document.getElementById('run-started-label');
-  var timeEl=document.getElementById('run-started-time');
-  var agoEl=document.getElementById('run-started-ago');
-  if(!el||!timeEl||!agoEl)return;
+  var banner=document.getElementById('run-state-banner');
+  var iconEl=document.getElementById('run-state-icon');
+  var subEl=document.getElementById('run-state-sub');
+  if(!banner||!iconEl||!subEl)return;
+
   var ri=STATE.runInfo;
-  if(!ri||!ri.started_at){el.style.display='none';return;}
-  el.style.display='block';
-  // Show local time
-  var d=new Date(ri.started_at);
-  timeEl.textContent=d.toLocaleTimeString();
-  // Show elapsed
-  var secs=Math.floor((Date.now()-d.getTime())/1000);
-  var ago=secs<60?secs+'s ago':secs<3600?Math.floor(secs/60)+'m ago':Math.floor(secs/3600)+'h '+Math.floor((secs%3600)/60)+'m ago';
-  agoEl.textContent=ago;
+  if(!ri){banner.style.display='none';return;}
+  banner.style.display='block';
+
+  var status=ri.status||'';
+  var now=Date.now();
+
+  if(status==='stopped'){
+    banner.style.background='rgba(255,49,49,.1)';
+    banner.style.borderColor='rgba(255,49,49,.35)';
+    iconEl.style.color='#ff3131';
+    iconEl.textContent='⏹ STOPPED';
+    subEl.textContent='Click Start Fresh to restart';
+
+  } else if(status==='starting'){
+    banner.style.background='rgba(251,191,36,.1)';
+    banner.style.borderColor='rgba(251,191,36,.35)';
+    iconEl.style.color='#fbbf24';
+    iconEl.textContent='⚡ STARTING FRESH…';
+    subEl.textContent='Clearing data, launching Gen 1…';
+
+  } else if(status==='running'){
+    banner.style.background='rgba(57,255,20,.06)';
+    banner.style.borderColor='rgba(57,255,20,.25)';
+    iconEl.style.color='#39ff14';
+    var startedAt=ri.started_at?new Date(ri.started_at):null;
+    var timeStr=startedAt?startedAt.toLocaleTimeString():'';
+    iconEl.textContent='▶ RUNNING';
+    if(startedAt){
+      var secs=Math.floor((now-startedAt.getTime())/1000);
+      var elapsed=secs<60?secs+'s':secs<3600?Math.floor(secs/60)+'m '+secs%60+'s':Math.floor(secs/3600)+'h '+Math.floor((secs%3600)/60)+'m';
+      subEl.textContent='Started '+timeStr+' ('+elapsed+' ago)';
+    } else {
+      subEl.textContent='Started '+timeStr;
+    }
+
+  } else if(status==='waiting'){
+    banner.style.background='rgba(99,102,241,.1)';
+    banner.style.borderColor='rgba(99,102,241,.35)';
+    iconEl.style.color='#818cf8';
+    iconEl.textContent='⏳ WAITING…';
+    var resumeAt=ri.resume_at?new Date(ri.resume_at):null;
+    if(resumeAt){
+      var secsLeft=Math.max(0,Math.floor((resumeAt.getTime()-now)/1000));
+      var mLeft=Math.floor(secsLeft/60), sLeft=secsLeft%60;
+      subEl.textContent='Auto-restart in '+mLeft+'m '+sLeft+'s';
+    } else {
+      subEl.textContent='Lineage complete — auto-restarting soon';
+    }
+
+  } else {
+    banner.style.display='none';
+  }
 }
 
 /* ══ TABS: SUMMARY + CODE ══ */

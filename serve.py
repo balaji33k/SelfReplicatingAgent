@@ -237,6 +237,8 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
 
         elif action == "restart":
             logger.info("[api] Restart requested from dashboard")
+            # Immediately write STOPPED state so dashboard shows it right away
+            _write_run_state("stopped", reason="user_request")
             # Kill current subprocess, signal evolution loop to restart
             with _proc_lock:
                 if _current_proc and _current_proc.poll() is None:
@@ -271,6 +273,22 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
         if len(args) > 1 and args[1] not in ("200", "204", "304"):
             super().log_message(fmt, *args)
+
+
+def _write_run_state(status: str, **kwargs):
+    """
+    Write data/run_info.json with current evolution state.
+    status values: 'stopped' | 'starting' | 'running' | 'waiting'
+    Dashboard polls this every 3s to show the correct state banner.
+    """
+    data_dir = ROOT / "data"
+    data_dir.mkdir(exist_ok=True)
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    payload = {"status": status, "at": now, **kwargs}
+    try:
+        (data_dir / "run_info.json").write_text(json.dumps(payload))
+    except Exception as e:
+        logger.warning(f"[state] Could not write run_info.json: {e}")
 
 
 def run_http_server():
@@ -331,16 +349,13 @@ def run_evolution():
             continue
 
         logger.info("=== Starting evolution from Generation 1 ===")
+        _write_run_state("starting")
         _clear_volatile_data()
 
-        # Write run_info.json so the dashboard can show "Started at HH:MM:SS"
-        run_info = {
-            "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "started_at_local": time.strftime("%H:%M:%S"),
-            "run_number": int(time.time()),   # unique per run
-        }
-        (ROOT / "data" / "run_info.json").write_text(json.dumps(run_info))
-        logger.info(f"  Run started at {run_info['started_at']}")
+        # Write RUNNING state with start timestamp
+        started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        _write_run_state("running", started_at=started_at, run_number=int(time.time()))
+        logger.info(f"  Run started at {started_at}")
 
         # Launch gen_1 as a Popen so we can kill it on dashboard restart
         proc = subprocess.Popen(
@@ -355,6 +370,7 @@ def run_evolution():
         while proc.poll() is None:
             if _restart_event.is_set():
                 logger.info("[evolution] Dashboard restart requested — killing current run")
+                _write_run_state("stopped", reason="user_request")
                 proc.terminate()
                 try:
                     proc.wait(timeout=10)
@@ -370,16 +386,21 @@ def run_evolution():
         if _restart_event.is_set():
             logger.info("=== Restarting evolution immediately (dashboard request) ===")
             _restart_event.clear()
-            # Small delay so the dashboard sees the state change
-            time.sleep(3)
+            _write_run_state("starting")
+            time.sleep(2)
         else:
             logger.info(f"Gen 1 process exited with code {exit_code}")
             logger.info("Waiting 300s before restarting evolution lineage...")
+            resume_at = time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                                      time.gmtime(time.time() + 300))
+            _write_run_state("waiting", reason="lineage_complete",
+                             exit_code=exit_code, resume_at=resume_at)
             # Wait but remain interruptible by restart event
             _restart_event.wait(timeout=300)
             if _restart_event.is_set():
                 logger.info("=== Restarting early (dashboard request during wait) ===")
                 _restart_event.clear()
+                _write_run_state("starting")
 
 
 if __name__ == "__main__":
