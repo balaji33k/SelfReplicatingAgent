@@ -497,9 +497,17 @@
           <select id="model-picker-select" onchange="selectModel(this.value)" style="
             width:100%;background:#0d0e20;border:1px solid rgba(0,243,255,.3);
             border-radius:8px;color:#e0e0e0;padding:9px 13px;font-size:.8rem;
-            cursor:pointer;font-family:inherit;outline:none;
-            -webkit-appearance:none;appearance:none">
+            cursor:pointer;font-family:inherit;outline:none">
             <option value="">— select model —</option>
+            <optgroup label="── GEMINI (Google Free Tier) ──">
+              <option value="gemini-2.0-flash">● Gemini 2.0 Flash — 1500rpd/15rpm</option>
+              <option value="gemini-2.0-flash-lite">● Gemini 2.0 Flash Lite — 1500rpd/30rpm</option>
+            </optgroup>
+            <optgroup label="── GROQ (Free Tier) ──">
+              <option value="meta-llama/llama-4-scout-17b-16e-instruct">● Llama 4 Scout 17B — 500k/30k</option>
+              <option value="llama-3.1-8b-instant">● Llama 3.1 8B Instant — 500k/20k</option>
+              <option value="llama-3.3-70b-versatile">● Llama 3.3 70B Versatile — 100k/12k</option>
+            </optgroup>
           </select>
           <div id="model-status-hint" style="font-size:.6rem;color:#64748b;margin-top:5px;min-height:14px"></div>
         </div>
@@ -690,7 +698,7 @@ function setCtrlStatus(msg,color){
   if(el){el.textContent=msg;el.style.color=color||'#00f3ff';}
 }
 
-/* Populate the native <select> with model options + live status labels */
+/* Update status labels on the static <option> elements + hint line */
 function renderModelPicker(){
   var ms=STATE.modelStatus||{};
   var active=ms.active||'';
@@ -702,55 +710,37 @@ function renderModelPicker(){
   var hint=document.getElementById('model-status-hint');
   if(!sel)return;
 
-  var lastProvider='';
-  var html='<option value="">— select model —</option>';
-  _GROQ_MODELS.forEach(function(m){
+  // Update each option's label text with live status
+  Array.prototype.forEach.call(sel.options,function(opt){
+    if(!opt.value)return; // skip placeholder
+    var m=_GROQ_MODELS.find(function(x){return x.id===opt.value;});
+    if(!m)return;
     var isActive=(m.id===active);
     var isExhausted=(exhausted.indexOf(m.id)>=0);
     var isUnavail=(unavailable.indexOf(m.id)>=0);
     var isGemini=(m.provider==='gemini');
     var noKey=isGemini&&!geminiEnabled;
 
-    // Optgroup divider per provider
-    if(m.provider!==lastProvider){
-      if(lastProvider) html+='</optgroup>';
-      lastProvider=m.provider;
-      var grpLabel=isGemini?'── GEMINI (Google AI Free Tier) ──':'── GROQ (Free Tier) ──';
-      html+='<optgroup label="'+grpLabel+'">';
-    }
-
-    // Status prefix in the label
-    var prefix='';
-    if(noKey)           prefix='⚠ ';
-    else if(isUnavail)  prefix='✕ ';
-    else if(isExhausted)prefix='⬤ ';
-    else                prefix='● ';
-
-    var suffix='';
-    if(isActive)        suffix=' [ACTIVE]';
-    else if(noKey)      suffix=' [no key]';
-    else if(isExhausted)suffix=' [exhausted]';
-    else if(isUnavail)  suffix=' [unavailable]';
-
-    html+='<option value="'+m.id+'"'+(m.id===_selectedModel?' selected':'')+'>';
-    html+=prefix+m.name+' — '+m.tpd+'/'+m.tpm+suffix;
-    html+='</option>';
+    var prefix= noKey?'⚠ ':isUnavail?'✕ ':isExhausted?'⬤ ':'● ';
+    var suffix= isActive?' [ACTIVE]':noKey?' [no key]':isExhausted?' [exhausted]':isUnavail?' [unavailable]':'';
+    opt.text=prefix+m.name+' — '+m.tpd+'/'+m.tpm+suffix;
   });
-  if(lastProvider)html+='</optgroup>';
-  sel.innerHTML=html;
 
-  // Update the hint line below the select
+  // Sync select value with _selectedModel
+  if(_selectedModel&&sel.value!==_selectedModel)sel.value=_selectedModel;
+
+  // Update hint line for currently selected model
   if(hint){
     var selModel=_GROQ_MODELS.find(function(x){return x.id===_selectedModel;});
     if(!selModel){
       hint.textContent='';
     } else {
-      var isGemini=(selModel.provider==='gemini');
-      var noKey=isGemini&&!geminiEnabled;
-      if(noKey)
+      var sg=selModel.provider==='gemini';
+      var nk=sg&&!geminiEnabled;
+      if(nk)
         hint.innerHTML='<span style="color:#f59e0b">⚠ Add GoogleAPIKey / GEMINI_API_KEY as HF Space secret</span>';
       else if(exhausted.indexOf(selModel.id)>=0)
-        hint.innerHTML='<span style="color:#ff3131">⬤ Token limit reached — auto-fallback to next model</span>';
+        hint.innerHTML='<span style="color:#ff3131">⬤ Token limit reached — auto-fallback active</span>';
       else if(unavailable.indexOf(selModel.id)>=0)
         hint.innerHTML='<span style="color:#64748b">✕ Unavailable on this account</span>';
       else
