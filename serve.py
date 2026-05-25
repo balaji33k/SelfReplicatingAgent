@@ -188,7 +188,14 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(html)
         elif clean == "/api/models":
-            body = json.dumps(GROQ_FREE_MODELS).encode("utf-8")
+            payload = {
+                "models": ALL_MODELS,
+                "gemini_available": bool(
+                    os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+                ),
+                "groq_available": bool(os.environ.get("GROQ_API_KEY")),
+            }
+            body = json.dumps(payload).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))

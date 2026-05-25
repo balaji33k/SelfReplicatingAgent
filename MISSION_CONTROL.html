@@ -856,6 +856,8 @@ var STATE={heartbeat:null,evolutionLog:[],benchmarkMatrix:null,activeGen:null,
   genProgress:{},    // gen_num → {task_list, results, descriptions}
   tokenUsage:null,   // data/token_usage.json content
   modelStatus:null,  // data/model_status.json content
+  geminiAvailable:false,  // true if GEMINI_API_KEY secret is set (from /api/models)
+  groqAvailable:true,     // true if GROQ_API_KEY secret is set
   collapsed:new Set(),   // gens collapsed by user or auto
   userExpanded:new Set(), // gens user explicitly opened
   activeTab:'summary',   // 'summary' | 'code'
@@ -876,13 +878,22 @@ async function refresh(){
     loadJSON('data/evolution_log.json'),
     loadJSON('data/benchmark_matrix.json'),
     loadJSON('data/token_usage.json'),
-    loadJSON('data/model_status.json')
+    loadJSON('data/model_status.json'),
+    loadJSON('api/models')
   ]);
   if(results[0])STATE.heartbeat=results[0];
   if(results[1])STATE.evolutionLog=Array.isArray(results[1])?results[1]:[];
   if(results[2])STATE.benchmarkMatrix=results[2];
   if(results[3])STATE.tokenUsage=results[3];
   if(results[4])STATE.modelStatus=results[4];
+  if(results[5]){
+    // /api/models now returns {models, gemini_available, groq_available}
+    STATE.geminiAvailable=results[5].gemini_available||false;
+    STATE.groqAvailable=results[5].groq_available||false;
+    // Merge gemini_available into modelStatus so renderModelPicker sees it
+    if(!STATE.modelStatus)STATE.modelStatus={};
+    STATE.modelStatus.gemini_enabled=STATE.geminiAvailable;
+  }
 
   // Load progress for all known gens
   var knownGens=getKnownGens();
