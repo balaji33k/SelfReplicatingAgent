@@ -50,12 +50,13 @@ _DEFAULT_LIMITS = {"tpd": 500_000, "tpm": 30_000}
 
 # Ordered fallback chain — when primary hits TPD, switch to next model.
 # Each model has its own independent TPD budget at Groq free tier.
+# NOTE: llama-4-maverick is excluded — not available on free tier (returns 404).
 _FALLBACK_ORDER = [
     "meta-llama/llama-4-scout-17b-16e-instruct",   # primary (30k TPM / 500k TPD)
-    "meta-llama/llama-4-maverick-17b-128e-instruct", # fallback 1 (30k TPM / 500k TPD)
-    "llama-3.1-8b-instant",                           # fallback 2 (20k TPM / 500k TPD)
-    "gemma2-9b-it",                                    # fallback 3 (15k TPM / 500k TPD)
-    "mixtral-8x7b-32768",                              # fallback 4 (18k TPM / 500k TPD)
+    "llama-3.1-8b-instant",                          # fallback 1 (20k TPM / 500k TPD)
+    "gemma2-9b-it",                                   # fallback 2 (15k TPM / 500k TPD)
+    "mixtral-8x7b-32768",                             # fallback 3 (18k TPM / 500k TPD)
+    "llama-3.3-70b-versatile",                        # fallback 4 (12k TPM / 100k TPD)
 ]
 
 # Max wait time (seconds) for a TPM rate-limit sleep.
@@ -165,7 +166,7 @@ class LLMClient:
              switch to next fallback, retry immediately.
           3. If no fallbacks remain → re-raise so callers can handle it.
         """
-        max_attempts = len(_FALLBACK_ORDER) + 2   # enough for all fallbacks + 2 TPM retries
+        max_attempts = len(_FALLBACK_ORDER) + 4   # enough for all fallbacks + several TPM retries
         for attempt in range(max_attempts):
             try:
                 response = self._llm.invoke(lc_messages)
@@ -175,34 +176,52 @@ class LLMClient:
                 err_str = str(exc)
                 is_rate_limit = ("429" in err_str or "rate_limit_exceeded" in err_str
                                  or "RateLimitError" in type(exc).__name__)
-                if not is_rate_limit:
-                    raise
+                is_not_found = ("404" in err_str or "model_not_found" in err_str
+                                or "does not exist" in err_str)
 
-                retry_sec = self._parse_retry_seconds(err_str)
-                current_model = self.config.model_name
+                if is_rate_limit:
+                    retry_sec = self._parse_retry_seconds(err_str)
+                    current_model = self.config.model_name
 
-                if retry_sec <= _MAX_TPM_SLEEP_SEC:
-                    # TPM (per-minute) limit — short wait, retry same model
-                    sleep_time = retry_sec + 5
+                    if retry_sec <= _MAX_TPM_SLEEP_SEC:
+                        # TPM (per-minute) limit — short wait, retry same model
+                        sleep_time = retry_sec + 5
+                        logger.warning(
+                            f"[llm_client] TPM rate limit on {current_model} — "
+                            f"sleeping {sleep_time:.0f}s (attempt {attempt+1})"
+                        )
+                        time.sleep(sleep_time)
+                    else:
+                        # TPD (per-day) exhausted on this model — switch to fallback
+                        self._exhausted_models.add(current_model)
+                        logger.warning(
+                            f"[llm_client] TPD exhausted on {current_model} "
+                            f"(retry in {retry_sec:.0f}s) — switching to fallback model"
+                        )
+                        if not self._switch_to_next_model():
+                            raise RuntimeError(
+                                f"All Groq models exhausted for today. "
+                                f"Exhausted: {self._exhausted_models}. "
+                                f"Last error: {exc}"
+                            ) from exc
+
+                elif is_not_found:
+                    # Model doesn't exist on this account (404) — skip to next fallback
+                    bad_model = self.config.model_name
+                    self._exhausted_models.add(bad_model)
                     logger.warning(
-                        f"[llm_client] TPM rate limit on {current_model} — "
-                        f"sleeping {sleep_time:.0f}s (attempt {attempt+1})"
-                    )
-                    time.sleep(sleep_time)
-                else:
-                    # TPD (per-day) exhausted on this model — switch to fallback
-                    self._exhausted_models.add(current_model)
-                    logger.warning(
-                        f"[llm_client] TPD exhausted on {current_model} "
-                        f"(retry in {retry_sec:.0f}s) — switching to fallback model"
+                        f"[llm_client] Model {bad_model} not found (404) — "
+                        f"skipping to next fallback"
                     )
                     if not self._switch_to_next_model():
-                        # No more fallbacks
                         raise RuntimeError(
-                            f"All Groq models exhausted for today. "
-                            f"Exhausted: {self._exhausted_models}. "
+                            f"No available Groq models. "
+                            f"Tried: {self._exhausted_models}. "
                             f"Last error: {exc}"
                         ) from exc
+
+                else:
+                    raise
         raise RuntimeError(f"[llm_client] Exceeded {max_attempts} retry attempts")
 
     def _parse_retry_seconds(self, error_msg: str) -> float:
