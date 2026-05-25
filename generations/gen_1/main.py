@@ -34,7 +34,7 @@ _PROJECT_ROOT = _GEN_DIR.parent.parent if _GEN_DIR.parent.name == "generations" 
 _HEARTBEAT_PATH = _PROJECT_ROOT / "data" / "heartbeat.json"
 
 
-def _write_progress(gen_num: int, task_ids: list, completed: dict) -> None:
+def _write_progress(gen_num: int, task_ids: list, completed: dict, descriptions: dict = None) -> None:
     """Write per-task progress to data/gen_N_progress.json — read by the dashboard."""
     try:
         _HEARTBEAT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -43,6 +43,7 @@ def _write_progress(gen_num: int, task_ids: list, completed: dict) -> None:
             "gen": gen_num,
             "task_list": task_ids,
             "results": completed,
+            "descriptions": descriptions or {},
         }))
     except Exception:
         pass
@@ -141,8 +142,15 @@ def run_generation(gen_config: Config, generation_number: int):
     task_ids = [t.task_id for t in tasks]
     completed_progress: dict = {}
 
+    # Build short descriptions for each task (first line, max 80 chars)
+    task_descriptions: dict = {}
+    for t in tasks:
+        raw = getattr(t, "description", "") or getattr(t, "problem_statement", "") or ""
+        first_line = raw.strip().split("\n")[0].strip()
+        task_descriptions[t.task_id] = first_line[:80] if first_line else t.task_id
+
     _write_heartbeat(generation_number, "RUNNING", 0, total_tasks, 0, 0, "", [])
-    _write_progress(generation_number, task_ids, {})
+    _write_progress(generation_number, task_ids, {}, task_descriptions)
 
     # 3. Run pipeline for each task
     for i, task in enumerate(tasks):
@@ -187,7 +195,7 @@ def run_generation(gen_config: Config, generation_number: int):
                 "error_type": result.error_type or "",
                 "runtime": round(result.runtime, 2),
             }
-            _write_progress(generation_number, task_ids, completed_progress)
+            _write_progress(generation_number, task_ids, completed_progress, task_descriptions)
 
             status = "PASS" if result.success else f"FAIL ({result.error_type})"
             cycle_info = ", ".join(f"{k}={v}" for k, v in result.cycles.items() if v > 0)

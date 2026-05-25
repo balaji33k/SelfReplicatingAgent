@@ -613,6 +613,7 @@ function renderTaskRows(gen,progress,evoEntry,activeTid){
   }
   if(!taskList.length) return '';
 
+  var descs=(progress&&progress.descriptions)||{};
   var passCount=0,failCount=0,pending=0;
   var rows=taskList.map(function(tid){
     var r=resultsMap[tid];
@@ -628,6 +629,7 @@ function renderTaskRows(gen,progress,evoEntry,activeTid){
     } else {
       icon='<span style="opacity:.3">·</span>';cls='t-pend';pending++;
     }
+    var label=descs[tid]||tid;
     var errHtml=r&&!isActive&&r.error_type?'<div class="task-err">'+r.error_type+'</div>':'';
     var rtHtml=r&&r.runtime?'<div class="task-rt">'+r.runtime+'s</div>':'';
     var clickHtml='';
@@ -640,9 +642,9 @@ function renderTaskRows(gen,progress,evoEntry,activeTid){
       }).replace(/"/g,'&quot;');
       clickHtml=' onclick="openDrawer('+safeRow+','+gen+')" style="cursor:pointer"';
     }
-    return '<div class="task-row '+cls+'"'+clickHtml+'>'+
+    return '<div class="task-row '+cls+'"'+clickHtml+' title="'+tid+'">'+
       '<div class="task-icon">'+icon+'</div>'+
-      '<div class="task-id">'+tid+'</div>'+
+      '<div class="task-id">'+label+'</div>'+
       errHtml+rtHtml+
     '</div>';
   }).join('');
@@ -721,6 +723,7 @@ function renderSidebarNav(){
       e.task_results.forEach(function(r){resultsMap[r.task_id]=r;});
     }
     if(taskList.length){
+      var descs=(progress&&progress.descriptions)||{};
       var rows=taskList.map(function(tid){
         var r=resultsMap[tid];
         var isActive=tid===activeTid;
@@ -734,15 +737,16 @@ function renderSidebarNav(){
         } else {
           icon='<span style="opacity:.3">·</span>';cls='t-pend';
         }
+        var label=descs[tid]||tid;
         var errHtml=(r&&cls==='t-fail'&&r.error_type)?'<span class="sb-task-err">'+r.error_type+'</span>':'';
         var clickHtml='';
         if(r&&cls==='t-fail'){
           var safeRow=JSON.stringify({task_id:tid,status:'fail',error_type:r.error_type||'',agents_used:r.agents_used||[],cycles:r.cycles||{}}).replace(/"/g,'&quot;');
           clickHtml=' onclick="openDrawer('+safeRow+','+g+')"';
         }
-        return '<div class="sb-task-row '+cls+'"'+clickHtml+'>'+
+        return '<div class="sb-task-row '+cls+'"'+clickHtml+' title="'+tid+'">'+
           '<div class="sb-task-icon">'+icon+'</div>'+
-          '<div class="sb-task-id">'+tid+'</div>'+
+          '<div class="sb-task-id">'+label+'</div>'+
           errHtml+
         '</div>';
       }).join('');
