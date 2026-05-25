@@ -58,7 +58,7 @@ class AgentTopologyConfig:
 
 
 class LLMConfig:
-    def __init__(self, model_name: str = "deepseek-r1-distill-llama-70b", api_key_env_var: str = "GROQ_API_KEY", temperature: float = 0.7):
+    def __init__(self, model_name: str = "llama-3.3-70b-versatile", api_key_env_var: str = "GROQ_API_KEY", temperature: float = 0.7):
         self.model_name = model_name
         # api_key is kept for compatibility but LLMClient reads directly from env vars
         self.api_key = os.getenv(api_key_env_var) or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -115,7 +115,7 @@ class Config:
 
         llm_data = data.get("llm_config", {})
         config.llm_config = LLMConfig(
-            model_name=llm_data.get("model_name", "deepseek-r1-distill-llama-70b"),
+            model_name=llm_data.get("model_name", "llama-3.3-70b-versatile"),
             temperature=llm_data.get("temperature", 0.7)
             # api_key is always loaded from env var
         )

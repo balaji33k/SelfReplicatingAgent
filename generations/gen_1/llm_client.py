@@ -59,7 +59,7 @@ class LLMClient:
         model = self.config.model_name
         # If config still has a Gemini model name, fall back to deepseek
         if "gemini" in model.lower():
-            model = "deepseek-r1-distill-llama-70b"
+            model = "llama-3.3-70b-versatile"
             logger.info(f"[llm_client] Gemini model name in config; using {model} for Groq")
         payload = {
             "model": model,
