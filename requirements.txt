@@ -1,1 +1,5 @@
 huggingface_hub>=0.23.0
+langgraph>=0.2.0
+langchain-groq>=0.2.0
+langchain-core>=0.3.0
+typing-extensions>=4.0.0

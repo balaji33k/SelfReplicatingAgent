@@ -29,11 +29,13 @@ logger = logging.getLogger(__name__)
 # Infrastructure files the LLM should NOT regenerate
 INFRA_FILES = {"telemetry.py", "lineage_memory.py"}
 
-# Files the LLM MUST generate (one at a time on Groq free tier)
+# Files the LLM MUST generate (one at a time on Groq free tier).
+# NOTE: llm_client.py is NOT listed here — it is infrastructure (ChatGroq-backed)
+# that spawner.py copies from the parent generation to preserve provider failover.
 REQUIRED_FILES = [
-    "main.py", "config.py", "llm_client.py", "task_manager.py",
+    "main.py", "config.py", "task_manager.py",
     "analysis.py", "evolution_engine.py", "spawner.py",
-    # Multi-agent pipeline
+    # Multi-agent pipeline (LangGraph StateGraph)
     "contracts.py", "agent_base.py", "pipeline.py",
     # Specialist agents
     "agent_analyst.py", "agent_architect.py", "agent_coder.py",
@@ -151,7 +153,12 @@ Write a concise improvement plan (plain text, no code, max 300 words) that expla
 2. Which specific files need to change and what must be different
 3. What improvement you expect in Generation {next_gen}'s pass rate
 
-Be specific about agent prompts, pipeline logic, and error handling improvements."""
+Be specific about agent prompts, pipeline logic, and error handling improvements.
+
+ARCHITECTURE CONSTRAINTS (must be preserved in Generation {next_gen}):
+- Pipeline uses LangGraph StateGraph (langgraph>=0.2.0); do NOT revert to custom loops
+- LLM client uses ChatGroq (langchain-groq) — llm_client.py is infra, copied automatically
+- Model: meta-llama/llama-4-scout-17b-16e-instruct on Groq (30k TPM / 500k TPD)"""
 
         response = self.llm_client.call(prompt)
         return response.strip()[:1500]  # Cap at 1500 chars
@@ -196,11 +203,17 @@ PARENT VERSION (first 400 chars — DO NOT COPY, only use as structural referenc
 REQUIREMENTS:
 - File: {fname}  Generation: {next_gen}
 - Fix the failures described above that this file is responsible for
-- The LLMClient is imported from llm_client.py (already provided — do NOT regenerate it)
-- LLMClient auto-detects provider from env: GROQ_API_KEY (primary), GEMINI_API_KEY (fallback on 429)
-- Default Groq model: llama-3.3-70b-versatile
+- llm_client.py is INFRASTRUCTURE (ChatGroq-backed) — do NOT generate it; it is copied automatically
+- LLMClient uses ChatGroq (langchain-groq), reads GROQ_API_KEY from env, max_retries=7
+- Default Groq model: meta-llama/llama-4-scout-17b-16e-instruct (30k TPM / 500k TPD)
+- pipeline.py MUST use LangGraph (langgraph.graph.StateGraph) — NOT custom loops
+  • Import: from langgraph.graph import StateGraph, START, END
+  • PipelineState as TypedDict flows through all nodes
+  • Conditional edges replace _critic_reviser_loop / _debug_loop methods
+  • Compile graph once in __init__; stream with stream_mode="updates" in solve()
 - Every agent file must own its prompt internally (not rely on external prompt files)
 - Keep the same data contracts (TaskContract, AnalysisSpec, CodeArtifact, etc.)
+- requirements.txt already includes: langgraph>=0.2.0, langchain-groq>=0.2.0, langchain-core>=0.3.0
 
 OUTPUT: Write ONLY the complete Python source code for {fname}.
 Start with the module docstring. No explanation outside the code."""
@@ -213,14 +226,13 @@ Start with the module docstring. No explanation outside the code."""
         roles = {
             "main.py": "Entry point — loads tasks, runs pipeline, triggers evolution",
             "config.py": "Configuration — AgentTopologyConfig, LLMConfig, model defaults",
-            "llm_client.py": "LLM API client — Groq (primary) + Gemini fallback, retry logic",
             "task_manager.py": "Task loading from problem_pool.json",
             "analysis.py": "Failure analysis — classifies errors, attributes to agents",
             "evolution_engine.py": "Evolution — designs next generation from failure evidence",
             "spawner.py": "Spawner — validates, writes, and launches the next generation",
             "contracts.py": "Data contracts — typed dataclasses between agents",
             "agent_base.py": "Base class for all specialist agents",
-            "pipeline.py": "AgentPipeline — orchestrates agents per AgentTopologyConfig",
+            "pipeline.py": "AgentPipeline — LangGraph StateGraph (langgraph>=0.2.0); nodes per AgentTopologyConfig; PipelineState TypedDict; conditional edges for critic/debug cycles; stream_mode='updates'",
             "agent_analyst.py": "Analyst agent — decomposes problem into AnalysisSpec",
             "agent_architect.py": "Architect agent — designs solution as DesignSpec",
             "agent_coder.py": "Coder agent — generates working Python code; use chain-of-thought",
