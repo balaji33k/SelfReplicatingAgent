@@ -301,6 +301,37 @@
     .attr-count{font-size:1.4rem;font-weight:800;color:var(--magenta);line-height:1}
     .attr-name{font-size:.56rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
 
+    /* ── Evolution Improvements ── */
+    .evo-imp-section{display:flex;flex-direction:column;gap:14px}
+    .evo-imp-card{border:1px solid rgba(0,243,255,.15);border-radius:16px;
+      background:linear-gradient(135deg,rgba(0,243,255,.03),rgba(255,0,255,.02));
+      padding:20px;position:relative;overflow:hidden;transition:.3s}
+    .evo-imp-card::before{content:'';position:absolute;top:0;left:0;bottom:0;width:3px;
+      background:linear-gradient(180deg,var(--cyan),var(--magenta));border-radius:3px 0 0 3px}
+    .evo-imp-card.improved::before{background:linear-gradient(180deg,var(--lime),var(--cyan))}
+    .evo-imp-card.regressed::before{background:linear-gradient(180deg,var(--red),var(--amber))}
+    .evo-imp-card.pending::before{background:var(--dim)}
+    .evo-imp-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+    .evo-imp-gen{font-size:.9rem;font-weight:800;color:var(--text)}
+    .evo-imp-gen span{color:var(--cyan);margin:0 4px}
+    .evo-imp-delta-chip{padding:3px 10px;border-radius:20px;font-size:.6rem;font-weight:700;
+      border:1px solid;display:flex;align-items:center;gap:4px}
+    .evo-imp-delta-chip.improved{color:var(--lime);border-color:rgba(57,255,20,.3);background:rgba(57,255,20,.08)}
+    .evo-imp-delta-chip.regressed{color:var(--red);border-color:rgba(255,49,49,.3);background:rgba(255,49,49,.08)}
+    .evo-imp-delta-chip.pending{color:var(--dim);border-color:var(--border);background:rgba(255,255,255,.03)}
+    .evo-imp-meta{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+    .evo-imp-rate{font-size:.62rem;color:var(--dim)}
+    .evo-imp-rate strong{color:var(--cyan)}
+    .evo-imp-tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
+    .evo-imp-tag-err{padding:2px 8px;border-radius:4px;font-size:.56rem;font-weight:600;
+      background:rgba(255,49,49,.1);color:var(--red);border:1px solid rgba(255,49,49,.2);font-family:var(--mono)}
+    .evo-imp-tag-topo{padding:2px 8px;border-radius:4px;font-size:.56rem;font-weight:600;
+      background:rgba(57,255,20,.08);color:var(--lime);border:1px solid rgba(57,255,20,.2)}
+    .evo-imp-divider{height:1px;background:var(--border);margin:10px 0}
+    .evo-imp-log-label{font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+    .evo-imp-log-text{font-size:.68rem;color:var(--text);line-height:1.65}
+    .evo-imp-empty{text-align:center;padding:32px;color:var(--dim);font-size:.68rem}
+
     /* ── Drawer ── */
     .overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);
       z-index:999;opacity:0;pointer-events:none;transition:.3s}
@@ -403,6 +434,12 @@
 
     <!-- GEN DETAIL -->
     <div id="gen-detail"></div>
+
+    <!-- EVOLUTION IMPROVEMENTS -->
+    <div class="card" id="evo-improvements-card" style="display:none">
+      <div class="card-title">🧬 Evolution Improvements</div>
+      <div id="evo-improvements"></div>
+    </div>
 
     <!-- HERO PROGRESS CARD -->
       <div class="hero-top">
@@ -567,6 +604,7 @@ function renderAll(){
   renderSidebarNav();
   renderTimeline();
   if(STATE.activeGen!==null)renderGenDetail(STATE.activeGen);
+  renderImprovements();
   renderTaskTabs();
   renderTopology();
 }
@@ -1040,6 +1078,77 @@ function renderPhaseBadges(pr){
 }
 
 /* ══ SIDEBAR NAV ══ */
+/* ══ EVOLUTION IMPROVEMENTS ══ */
+function renderImprovements(){
+  var card=document.getElementById('evo-improvements-card');
+  var container=document.getElementById('evo-improvements');
+  var log=STATE.evolutionLog||[];
+
+  if(!log.length){
+    card.style.display='none';
+    return;
+  }
+  card.style.display='';
+
+  var html='<div class="evo-imp-section">';
+  log.forEach(function(e){
+    var delta=e.improvement_delta;
+    var improved=typeof delta==='number'&&delta>0;
+    var regressed=typeof delta==='number'&&delta<0;
+    var pending=delta===null||delta===undefined;
+
+    var cardClass=improved?'improved':regressed?'regressed':'pending';
+
+    // Delta chip
+    var chipClass=improved?'improved':regressed?'regressed':'pending';
+    var chipLabel=pending
+      ?'⏳ Gen '+e.to_gen+' pending'
+      :improved
+        ?'▲ +'+pct(Math.abs(delta))+' Gen '+e.to_gen
+        :'▼ −'+pct(Math.abs(delta))+' Gen '+e.to_gen;
+
+    // Error type tags
+    var errTags='';
+    var bd=e.failure_breakdown||{};
+    Object.entries(bd).sort(function(a,b){return b[1]-a[1];}).forEach(function(kv){
+      errTags+='<span class="evo-imp-tag-err">'+kv[0]+' ×'+kv[1]+'</span>';
+    });
+
+    // Topology change tags
+    var topoTags='';
+    (e.topology_changes||[]).forEach(function(c){
+      topoTags+='<span class="evo-imp-tag-topo">'+c+'</span>';
+    });
+
+    var allTags=errTags+topoTags;
+
+    // Pass rate display
+    var rateStr=pct(e.pass_rate_actual||0)+' pass rate ('+
+      (e.passed||0)+'/'+( e.total||0)+' tasks)';
+
+    // Improvement log — full text, not clamped
+    var logText=(e.improvement_log||'—').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    html+=
+      '<div class="evo-imp-card '+cardClass+'">'+
+        '<div class="evo-imp-header">'+
+          '<div class="evo-imp-gen">Gen '+e.from_gen+' <span>→</span> Gen '+e.to_gen+'</div>'+
+          '<div class="evo-imp-delta-chip '+chipClass+'">'+chipLabel+'</div>'+
+        '</div>'+
+        '<div class="evo-imp-meta">'+
+          '<span class="evo-imp-rate">Gen '+e.from_gen+': <strong>'+rateStr+'</strong></span>'+
+          (e.timestamp?'<span class="evo-imp-rate">'+e.timestamp.slice(0,16).replace('T',' ')+'</span>':'')+
+        '</div>'+
+        (allTags?'<div class="evo-imp-tags">'+allTags+'</div>':'')+
+        '<div class="evo-imp-divider"></div>'+
+        '<div class="evo-imp-log-label">🤖 What the LLM decided to improve</div>'+
+        '<div class="evo-imp-log-text">'+logText+'</div>'+
+      '</div>';
+  });
+  html+='</div>';
+  container.innerHTML=html;
+}
+
 function renderSidebarNav(){
   var gens=getKnownGens(),hb=STATE.heartbeat;
   document.getElementById('gen-nav').innerHTML=gens.map(function(g){
