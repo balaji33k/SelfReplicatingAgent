@@ -29,10 +29,15 @@ PORT = int(os.environ.get("PORT", 8080))
 ROOT = Path(__file__).resolve().parent
 
 
-AGENT_FILES = ["main.py", "pipeline.py", "meta_architect.py", "spawner.py",
-               "env.py", "config.py", "contracts.py", "llm_client.py",
-               "evolution_tracker.py", "task_manager.py", "analysis.py",
-               "prompts.py", "telemetry.py"]
+AGENT_FILES = [
+    "main.py", "config.py", "pipeline.py", "contracts.py",
+    "agent_base.py", "llm_client.py", "task_manager.py",
+    "analysis.py", "evolution_engine.py", "spawner.py",
+    "agent_analyst.py", "agent_architect.py", "agent_coder.py",
+    "agent_critic.py", "agent_reviser.py", "agent_test_writer.py",
+    "agent_debugger.py", "agent_clone_inspector.py",
+    "telemetry.py", "evolution_tracker.py",
+]
 
 
 def _build_code_browser() -> str:
@@ -202,11 +207,30 @@ def run_evolution():
 
         logger.info("=== Starting evolution from Generation 1 ===")
 
-        # Clean previous results so each run is fresh
+        # Clean all volatile runtime files so each run is truly fresh
+        # 1. Gen 1 results
         results_dir = ROOT / "generations" / "gen_1" / "results"
         if results_dir.exists():
             for f in results_dir.glob("*.json"):
                 f.unlink()
+
+        # 2. data/ runtime files (heartbeat, evolution log, token usage, progress)
+        #    Keep: fixed_problem_pool.json, gen_1.json (static reference data)
+        VOLATILE_DATA = [
+            "heartbeat.json", "evolution_log.json",
+            "token_usage.json", "benchmark_matrix.json",
+        ]
+        data_dir = ROOT / "data"
+        data_dir.mkdir(exist_ok=True)
+        for fname in VOLATILE_DATA:
+            fp = data_dir / fname
+            if fp.exists():
+                fp.unlink()
+                logger.info(f"  Cleared: data/{fname}")
+        # Remove per-gen progress files
+        for fp in data_dir.glob("gen_*_progress.json"):
+            fp.unlink()
+            logger.info(f"  Cleared: data/{fp.name}")
 
         proc = subprocess.run(
             [sys.executable, str(gen1_main), "--generation", "1"],
