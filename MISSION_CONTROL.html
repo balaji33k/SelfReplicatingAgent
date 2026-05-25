@@ -439,6 +439,12 @@
     <div class="brand">Evolution<br>Control</div>
     <div id="live-badge"></div>
     <div style="font-size:.54rem;color:var(--dim);margin-top:-4px" id="last-upd-label">Polling…</div>
+    <div id="run-started-label" style="display:none;margin-top:4px;padding:5px 8px;
+      border-radius:7px;border:1px solid rgba(57,255,20,.25);background:rgba(57,255,20,.06)">
+      <div style="font-size:.5rem;color:#64748b;text-transform:uppercase;letter-spacing:1px">Run started</div>
+      <div id="run-started-time" style="font-size:.68rem;color:#39ff14;font-weight:700;font-family:monospace"></div>
+      <div id="run-started-ago" style="font-size:.5rem;color:#64748b"></div>
+    </div>
     <div style="height:1px;background:var(--border);margin:4px 0"></div>
     <h2>Generations</h2>
     <div id="gen-nav" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -855,6 +861,7 @@ var STATE={heartbeat:null,evolutionLog:[],benchmarkMatrix:null,activeGen:null,
   genProgress:{},    // gen_num → {task_list, results, descriptions}
   tokenUsage:null,   // data/token_usage.json content
   modelStatus:null,  // data/model_status.json content
+  runInfo:null,      // data/run_info.json — written fresh on every Start Fresh
   geminiAvailable:false,  // true if GEMINI_API_KEY secret is set (from /api/models)
   groqAvailable:true,     // true if GROQ_API_KEY secret is set
   collapsed:new Set(),   // gens collapsed by user or auto
@@ -878,7 +885,8 @@ async function refresh(){
     loadJSON('data/benchmark_matrix.json'),
     loadJSON('data/token_usage.json'),
     loadJSON('data/model_status.json'),
-    loadJSON('api/models')
+    loadJSON('api/models'),
+    loadJSON('data/run_info.json')
   ]);
   if(results[0])STATE.heartbeat=results[0];
   if(results[1])STATE.evolutionLog=Array.isArray(results[1])?results[1]:[];
@@ -893,6 +901,7 @@ async function refresh(){
     if(!STATE.modelStatus)STATE.modelStatus={};
     STATE.modelStatus.gemini_enabled=STATE.geminiAvailable;
   }
+  if(results[6])STATE.runInfo=results[6];
 
   // Load progress for all known gens
   var knownGens=getKnownGens();
@@ -924,6 +933,24 @@ function renderAll(){
   renderImprovements();
   renderTaskTabs();
   renderTopology();
+  renderRunInfo();
+}
+
+function renderRunInfo(){
+  var el=document.getElementById('run-started-label');
+  var timeEl=document.getElementById('run-started-time');
+  var agoEl=document.getElementById('run-started-ago');
+  if(!el||!timeEl||!agoEl)return;
+  var ri=STATE.runInfo;
+  if(!ri||!ri.started_at){el.style.display='none';return;}
+  el.style.display='block';
+  // Show local time
+  var d=new Date(ri.started_at);
+  timeEl.textContent=d.toLocaleTimeString();
+  // Show elapsed
+  var secs=Math.floor((Date.now()-d.getTime())/1000);
+  var ago=secs<60?secs+'s ago':secs<3600?Math.floor(secs/60)+'m ago':Math.floor(secs/3600)+'h '+Math.floor((secs%3600)/60)+'m ago';
+  agoEl.textContent=ago;
 }
 
 /* ══ TABS: SUMMARY + CODE ══ */

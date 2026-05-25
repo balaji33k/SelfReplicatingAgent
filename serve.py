@@ -333,6 +333,15 @@ def run_evolution():
         logger.info("=== Starting evolution from Generation 1 ===")
         _clear_volatile_data()
 
+        # Write run_info.json so the dashboard can show "Started at HH:MM:SS"
+        run_info = {
+            "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "started_at_local": time.strftime("%H:%M:%S"),
+            "run_number": int(time.time()),   # unique per run
+        }
+        (ROOT / "data" / "run_info.json").write_text(json.dumps(run_info))
+        logger.info(f"  Run started at {run_info['started_at']}")
+
         # Launch gen_1 as a Popen so we can kill it on dashboard restart
         proc = subprocess.Popen(
             [sys.executable, str(gen1_main), "--generation", "1"],
