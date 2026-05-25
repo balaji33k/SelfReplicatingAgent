@@ -601,16 +601,32 @@
           <span id="live-status-text"></span>
         </div>
 
+        <!-- Overall progress bar -->
+        <div style="font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Overall — Tasks Completed</div>
         <div class="big-bar-track" id="big-bar-track">
           <div class="big-bar-fill" id="big-bar-fill" style="width:0%"></div>
         </div>
-        <div class="seg-bars" id="seg-bars">
+        <div class="seg-bars" id="seg-bars" style="margin-top:6px">
           <div class="seg-pend" style="flex:1"></div>
         </div>
         <div class="seg-labels">
           <span class="seg-label" style="color:var(--lime)" id="seg-pass-label">0 passed</span>
           <span class="seg-label" style="color:var(--red)" id="seg-fail-label">0 failed</span>
           <span class="seg-label" id="seg-pend-label">0 pending</span>
+        </div>
+
+        <!-- Task-level progress bar -->
+        <div id="task-progress-wrap" style="display:none;margin-top:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <div style="font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px">Current Task</div>
+            <div id="task-phase-label" style="font-size:.62rem;color:#fbbf24;font-weight:700;font-family:monospace"></div>
+          </div>
+          <div style="height:8px;background:rgba(255,255,255,.05);border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,.06)">
+            <div id="task-bar-fill" style="height:100%;border-radius:6px;
+              background:linear-gradient(90deg,#fbbf24,#f97316);
+              transition:width .6s ease;box-shadow:0 0 10px rgba(251,191,36,.4)"></div>
+          </div>
+          <div id="task-phase-steps" style="display:flex;justify-content:space-between;margin-top:5px;padding:0 2px"></div>
         </div>
       </div>
 
@@ -1392,7 +1408,38 @@ function renderHero(){
     actWrap.style.display='none';
   }
 
-  if(false){  // phase strip removed
+  // Task-level progress bar
+  var taskWrap=document.getElementById('task-progress-wrap');
+  var taskFill=document.getElementById('task-bar-fill');
+  var taskLabel=document.getElementById('task-phase-label');
+  var taskSteps=document.getElementById('task-phase-steps');
+  var TASK_PHASES=[
+    {phase:'thinking',       label:'Thinking',  pct:15},
+    {phase:'writing_code',   label:'Coding',    pct:45},
+    {phase:'reviewing',      label:'Reviewing', pct:60},
+    {phase:'revising',       label:'Revising',  pct:72},
+    {phase:'compiling',      label:'Compiling', pct:85},
+    {phase:'debugging',      label:'Debugging', pct:95},
+  ];
+  if(hb.status==='RUNNING'&&hb.active_task_id&&taskWrap){
+    taskWrap.style.display='block';
+    var cp=hb.current_phase||'thinking';
+    var found=TASK_PHASES.find(function(p){return p.phase===cp;});
+    var pct=found?found.pct:10;
+    var lbl=found?found.label:phaseLabel(cp);
+    taskFill.style.width=pct+'%';
+    taskLabel.textContent=lbl+'…';
+    // Step ticks
+    taskSteps.innerHTML=TASK_PHASES.map(function(p){
+      var active=p.phase===cp;
+      var done=p.pct<pct||(found&&p.pct===found.pct&&false);
+      var col=active?'#fbbf24':p.pct<pct?'#39ff14':'#475569';
+      return '<span style="font-size:.48rem;color:'+col+';font-weight:'+(active?'800':'400')+'">'+
+        (p.pct<pct?'✓ ':active?'▶ ':'')+p.label+'</span>';
+    }).join('');
+  } else if(taskWrap){
+    taskWrap.style.display='none';
+  if(false){  // close
   }
 
 }
