@@ -81,10 +81,38 @@ class Config:
         self.sandbox_config = SandboxConfig()
         self.topology = AgentTopologyConfig()   # Multi-agent pipeline topology
 
+        # Override model from user_config.json if present (set via dashboard)
+        self._apply_user_config()
+
         # Lineage metadata (set by the Spawner for subsequent generations)
         self.parent_pass_rate: float = None
         self.parent_error_types: dict = {}
         self.improvement_log: str = "Initial generation establishing the core framework."
+
+    def _apply_user_config(self):
+        """
+        Read data/user_config.json (written by the dashboard) and apply overrides.
+        Supported keys:
+          model  — Groq model name to use instead of the default
+        Non-fatal: if the file doesn't exist or is invalid, defaults are kept.
+        """
+        import json as _json
+        from pathlib import Path as _Path
+        try:
+            gen_dir = _Path(__file__).resolve().parent
+            project_root = (
+                gen_dir.parent.parent
+                if gen_dir.parent.name == "generations"
+                else gen_dir.parent
+            )
+            cfg_path = project_root / "data" / "user_config.json"
+            if cfg_path.exists():
+                data = _json.loads(cfg_path.read_text())
+                model = data.get("model", "").strip()
+                if model:
+                    self.llm_config.model_name = model
+        except Exception:
+            pass  # never block startup
 
     def to_dict(self):
         return {

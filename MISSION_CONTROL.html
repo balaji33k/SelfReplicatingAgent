@@ -464,6 +464,57 @@
     <!-- GEN DETAIL -->
     <div id="gen-detail"></div>
 
+    <!-- EVOLUTION CONTROLS CARD -->
+    <div class="card" id="controls-card">
+      <div class="card-title">⚙️ Evolution Controls</div>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">
+
+        <!-- Model selector -->
+        <div style="flex:1;min-width:220px">
+          <div style="font-size:.65rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">
+            Groq Model (free tier)
+          </div>
+          <select id="model-select" style="
+            width:100%;background:rgba(0,243,255,.06);border:1px solid rgba(0,243,255,.3);
+            border-radius:8px;color:#e0e0e0;padding:8px 12px;font-size:.8rem;
+            font-family:inherit;cursor:pointer;outline:none">
+            <option value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B — 500k TPD / 30k TPM</option>
+            <option value="llama-3.1-8b-instant">Llama 3.1 8B Instant — 500k TPD / 20k TPM</option>
+            <option value="llama-3.3-70b-versatile">Llama 3.3 70B Versatile — 100k TPD / 12k TPM</option>
+            <option value="deepseek-r1-distill-llama-70b">DeepSeek R1 Llama 70B — 500k TPD / 30k TPM</option>
+            <option value="deepseek-r1-distill-qwen-32b">DeepSeek R1 Qwen 32B — 500k TPD / 30k TPM</option>
+            <option value="qwen-qwq-32b">Qwen QwQ 32B — 500k TPD / 30k TPM</option>
+          </select>
+        </div>
+
+        <!-- Buttons -->
+        <div style="display:flex;gap:10px;flex-shrink:0">
+          <button id="btn-set-model" onclick="setModel()" style="
+            background:rgba(0,243,255,.1);border:1px solid rgba(0,243,255,.4);
+            color:#00f3ff;border-radius:8px;padding:8px 18px;font-size:.78rem;
+            font-family:inherit;cursor:pointer;transition:.2s"
+            onmouseover="this.style.background='rgba(0,243,255,.2)'"
+            onmouseout="this.style.background='rgba(0,243,255,.1)'">
+            💾 Apply Model
+          </button>
+
+          <button id="btn-restart" onclick="restartEvolution()" style="
+            background:rgba(255,0,255,.08);border:1px solid rgba(255,0,255,.35);
+            color:#ff00ff;border-radius:8px;padding:8px 18px;font-size:.78rem;
+            font-family:inherit;cursor:pointer;transition:.2s"
+            onmouseover="this.style.background='rgba(255,0,255,.18)'"
+            onmouseout="this.style.background='rgba(255,0,255,.08)'">
+            🔄 Start Fresh
+          </button>
+        </div>
+
+        <!-- Status message -->
+        <div id="ctrl-status" style="
+          width:100%;font-size:.72rem;min-height:18px;padding-top:4px;
+          transition:color .3s"></div>
+      </div>
+    </div>
+
     <!-- TOKEN BUDGET CARD -->
     <div class="card" id="token-budget-card" style="display:none">
       <div class="card-title">🤖 LLM Model &amp; Daily Token Budget</div>
@@ -588,6 +639,61 @@
 </div>
 
 <script>
+/* ── Evolution Controls ─────────────────────────────────────────────────── */
+function setCtrlStatus(msg, color){
+  var el=document.getElementById('ctrl-status');
+  if(el){el.textContent=msg; el.style.color=color||'#00f3ff';}
+}
+
+async function setModel(){
+  var sel=document.getElementById('model-select');
+  var model=sel?sel.value:'';
+  if(!model){setCtrlStatus('No model selected','#ff3131');return;}
+  setCtrlStatus('Saving model…','#ffb300');
+  try{
+    var r=await fetch('/api/config',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'set_model',model:model})});
+    var d=await r.json();
+    if(d.ok){
+      setCtrlStatus('✓ Model set to '+model+'. Restart to apply.','#39ff14');
+    } else {
+      setCtrlStatus('Error: '+(d.error||'unknown'),'#ff3131');
+    }
+  }catch(e){setCtrlStatus('Request failed: '+e.message,'#ff3131');}
+}
+
+async function restartEvolution(){
+  var btn=document.getElementById('btn-restart');
+  if(btn)btn.disabled=true;
+  setCtrlStatus('Sending restart…','#ffb300');
+  try{
+    var r=await fetch('/api/config',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'restart'})});
+    var d=await r.json();
+    if(d.ok){
+      setCtrlStatus('✓ '+d.message+' Dashboard will refresh shortly.','#00f3ff');
+      setTimeout(function(){if(btn)btn.disabled=false;},8000);
+    } else {
+      setCtrlStatus('Error: '+(d.error||'unknown'),'#ff3131');
+      if(btn)btn.disabled=false;
+    }
+  }catch(e){
+    setCtrlStatus('Request failed: '+e.message,'#ff3131');
+    if(btn)btn.disabled=false;
+  }
+}
+
+/* Sync model selector with current token_usage model on page load */
+function syncModelSelector(){
+  var tu=STATE.tokenUsage;
+  if(!tu||!tu.model)return;
+  var sel=document.getElementById('model-select');
+  if(sel){sel.value=tu.model;}
+}
+
+/* ── Main State ─────────────────────────────────────────────────────────── */
 var STATE={heartbeat:null,evolutionLog:[],benchmarkMatrix:null,activeGen:null,
   genProgress:{},    // gen_num → {task_list, results, descriptions}
   tokenUsage:null,   // data/token_usage.json content
@@ -643,6 +749,7 @@ function renderAll(){
   renderTimeline();
   if(STATE.activeGen!==null)renderGenDetail(STATE.activeGen);
   renderTokenBudget();
+  syncModelSelector();
   renderImprovements();
   renderTaskTabs();
   renderTopology();
