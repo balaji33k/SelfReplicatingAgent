@@ -230,6 +230,10 @@ def _build_graph(agents: dict, cfg):
     g.add_node("coder",     _make_coder_node(agents["coder"]))
     g.add_node("executor",  _executor_node)
 
+    # analyst → architect (always — this edge was previously missing, causing
+    # every task to silently end after the Analyst with error_type=NoExecution)
+    g.add_edge("analyst", "architect")
+
     # ── Optional: TestWriter ─────────────────────────────────────────
     if cfg.enable_test_writer and "test_writer" in agents:
         g.add_node("test_writer", _make_test_writer_node(agents["test_writer"]))
