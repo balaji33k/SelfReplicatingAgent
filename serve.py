@@ -161,12 +161,10 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
             super().do_GET()
 
     def end_headers(self):
-        # Prevent CDN/browser from caching live JSON data
-        path = self.path.split("?")[0]
-        if "/data/" in path or path.endswith(".json"):
-            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
-            self.send_header("Pragma", "no-cache")
-            self.send_header("Expires", "0")
+        # Prevent CDN/browser from caching — applies to ALL files
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
         self.send_header("Access-Control-Allow-Origin", "*")
         super().end_headers()
 
