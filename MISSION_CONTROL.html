@@ -648,12 +648,13 @@
 
 <script>
 /* ── Evolution Controls ─────────────────────────────────────────────────── */
-// Only models confirmed working on this Groq free-tier account.
-// deepseek/qwen models return 404 on this account — excluded.
 var _GROQ_MODELS=[
-  {id:'meta-llama/llama-4-scout-17b-16e-instruct', name:'Llama 4 Scout 17B',      tpd:'500k',tpm:'30k'},
-  {id:'llama-3.1-8b-instant',                       name:'Llama 3.1 8B Instant',   tpd:'500k',tpm:'20k'},
-  {id:'llama-3.3-70b-versatile',                    name:'Llama 3.3 70B Versatile',tpd:'100k',tpm:'12k'},
+  {id:'meta-llama/llama-4-scout-17b-16e-instruct', name:'Llama 4 Scout 17B',       tpd:'500k',  tpm:'30k',   provider:'groq'},
+  {id:'llama-3.1-8b-instant',                       name:'Llama 3.1 8B Instant',    tpd:'500k',  tpm:'20k',   provider:'groq'},
+  {id:'llama-3.3-70b-versatile',                    name:'Llama 3.3 70B Versatile', tpd:'100k',  tpm:'12k',   provider:'groq'},
+  {id:'gemini-2.0-flash',                           name:'Gemini 2.0 Flash',         tpd:'1000k', tpm:'15rpm', provider:'gemini'},
+  {id:'gemini-1.5-flash',                           name:'Gemini 1.5 Flash',         tpd:'1000k', tpm:'15rpm', provider:'gemini'},
+  {id:'gemini-1.5-flash-8b',                        name:'Gemini 1.5 Flash 8B',      tpd:'1000k', tpm:'15rpm', provider:'gemini'},
 ];
 var _selectedModel='';
 
@@ -668,52 +669,75 @@ function renderModelPicker(){
   var active=ms.active||'';
   var exhausted=ms.tpd_exhausted||[];
   var unavailable=ms.unavailable||[];
+  var geminiEnabled=ms.gemini_enabled||false;
 
   var list=document.getElementById('model-picker-list');
   if(!list)return;
+
+  var lastProvider='';
   var html='';
   _GROQ_MODELS.forEach(function(m){
     var isActive=(m.id===active);
     var isExhausted=(exhausted.indexOf(m.id)>=0);
     var isUnavail=(unavailable.indexOf(m.id)>=0);
     var isSelected=(m.id===_selectedModel);
+    var isGemini=(m.provider==='gemini');
+    var noKey=isGemini&&!geminiEnabled;
 
-    // Status dot + label
-    var dot,statusText,dotColor;
-    if(isUnavail){
-      dot='✕'; dotColor='#64748b'; statusText='decommissioned';
+    // Provider section divider
+    if(m.provider!==lastProvider){
+      lastProvider=m.provider;
+      var providerLabel=isGemini
+        ?'<span style="color:#4285f4">GEMINI</span> — Google AI Free Tier (1M TPD)'
+        :'<span style="color:#f97316">GROQ</span> — Free Tier (rolling 24h)';
+      html+='<div style="padding:6px 14px 4px;font-size:.58rem;color:#64748b;'+
+        'text-transform:uppercase;letter-spacing:1.5px;border-top:1px solid rgba(255,255,255,.07);'+
+        'background:rgba(255,255,255,.02)">'+providerLabel+'</div>';
+    }
+
+    // Status dot
+    var dot,dotColor;
+    if(noKey){
+      dot='⚠'; dotColor='#f59e0b';
+    } else if(isUnavail){
+      dot='✕'; dotColor='#64748b';
     } else if(isExhausted){
-      dot='●'; dotColor='#ff3131'; statusText='TPD exhausted';
-    } else if(isActive){
-      dot='●'; dotColor='#39ff14'; statusText='active';
+      dot='●'; dotColor='#ff3131';
     } else {
-      dot='●'; dotColor='#39ff14'; statusText='available';
+      dot='●'; dotColor='#39ff14';
     }
 
     var bg=isSelected?'rgba(0,243,255,.12)':'transparent';
-    var opacity=isUnavail?'0.45':'1';
+    var opacity=(isUnavail||noKey)?'0.55':'1';
 
     html+='<div onclick="selectModel(\''+m.id+'\')" style="'+
-      'display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;'+
+      'display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;'+
       'opacity:'+opacity+';background:'+bg+';transition:.15s;'+
-      'border-bottom:1px solid rgba(255,255,255,.05)"'+
+      'border-bottom:1px solid rgba(255,255,255,.04)"'+
       ' onmouseover="this.style.background=\'rgba(0,243,255,.08)\'"'+
       ' onmouseout="this.style.background=\''+bg+'\'"'+
       '>';
-    // Status dot
-    html+='<span style="color:'+dotColor+';font-size:.9rem;flex-shrink:0">'+dot+'</span>';
-    // Model name + status
+
+    // Dot
+    html+='<span style="color:'+dotColor+';font-size:.85rem;flex-shrink:0">'+dot+'</span>';
+
+    // Info
     html+='<div style="flex:1;min-width:0">';
-    html+='<div style="font-size:.78rem;color:#e0e0e0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
-      m.name+(isActive?' <span style="font-size:.62rem;color:#39ff14;border:1px solid rgba(57,255,20,.3);padding:1px 5px;border-radius:4px">ACTIVE</span>':'')+
-      '</div>';
-    html+='<div style="font-size:.62rem;color:';
-    html+=isUnavail?'#64748b':isExhausted?'#ff3131':'#64748b';
-    html+='">'+m.tpd+' TPD / '+m.tpm+' TPM';
-    if(isExhausted)html+=' — <span style="color:#ff3131">exhausted</span>';
-    if(isUnavail)html+=' — <span style="color:#64748b">unavailable</span>';
-    html+='</div></div>';
+    // Name row + badges
+    html+='<div style="font-size:.78rem;color:#e0e0e0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">';
+    html+=m.name;
+    if(isActive) html+=' <span style="font-size:.6rem;color:#39ff14;border:1px solid rgba(57,255,20,.3);padding:1px 5px;border-radius:4px;margin-left:4px">ACTIVE</span>';
+    if(isGemini) html+=' <span style="font-size:.6rem;color:#4285f4;border:1px solid rgba(66,133,244,.3);padding:1px 5px;border-radius:4px;margin-left:4px">GEMINI</span>';
     html+='</div>';
+    // Sub-row: limits + status
+    html+='<div style="font-size:.62rem;margin-top:1px;color:';
+    html+=(isUnavail||noKey)?'#64748b':isExhausted?'#ff3131':'#64748b';
+    html+='">'+m.tpd+' TPD / '+m.tpm;
+    if(noKey)     html+=' — <span style="color:#f59e0b">add GEMINI_API_KEY secret</span>';
+    else if(isExhausted) html+=' — <span style="color:#ff3131">exhausted</span>';
+    else if(isUnavail)   html+=' — <span style="color:#64748b">unavailable</span>';
+    html+='</div>';
+    html+='</div></div>';
   });
   list.innerHTML=html;
 }

@@ -35,14 +35,19 @@ _current_proc: subprocess.Popen = None  # current gen_1 subprocess (so we can ki
 _proc_lock = threading.Lock()
 
 # Known Groq free-tier models shown in the dashboard selector
-# Only models confirmed working on this Groq free-tier account.
-# deepseek-r1-distill-llama-70b, deepseek-r1-distill-qwen-32b, qwen-qwq-32b
-# all return 404 on this account — removed to avoid misleading the user.
-GROQ_FREE_MODELS = [
-    {"id": "meta-llama/llama-4-scout-17b-16e-instruct",  "name": "Llama 4 Scout 17B",       "tpd": "500k", "tpm": "30k"},
-    {"id": "llama-3.1-8b-instant",                        "name": "Llama 3.1 8B Instant",    "tpd": "500k", "tpm": "20k"},
-    {"id": "llama-3.3-70b-versatile",                     "name": "Llama 3.3 70B Versatile", "tpd": "100k", "tpm": "12k"},
+# Confirmed-working models on this account.
+# Groq: free tier, rolling 24h TPD window.
+# Gemini: Google AI free tier, 1M TPD / 1500 RPD / 15 RPM.
+ALL_MODELS = [
+    {"id": "meta-llama/llama-4-scout-17b-16e-instruct", "name": "Llama 4 Scout 17B",       "tpd": "500k",  "tpm": "30k",  "provider": "groq"},
+    {"id": "llama-3.1-8b-instant",                       "name": "Llama 3.1 8B Instant",    "tpd": "500k",  "tpm": "20k",  "provider": "groq"},
+    {"id": "llama-3.3-70b-versatile",                    "name": "Llama 3.3 70B Versatile", "tpd": "100k",  "tpm": "12k",  "provider": "groq"},
+    {"id": "gemini-2.0-flash",                           "name": "Gemini 2.0 Flash",         "tpd": "1000k", "tpm": "15rpm","provider": "gemini"},
+    {"id": "gemini-1.5-flash",                           "name": "Gemini 1.5 Flash",         "tpd": "1000k", "tpm": "15rpm","provider": "gemini"},
+    {"id": "gemini-1.5-flash-8b",                        "name": "Gemini 1.5 Flash 8B",      "tpd": "1000k", "tpm": "15rpm","provider": "gemini"},
 ]
+# Keep old name as alias for any code that references it
+GROQ_FREE_MODELS = ALL_MODELS
 
 
 AGENT_FILES = [
@@ -211,7 +216,7 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
 
         if action == "set_model":
             model_id = body.get("model", "").strip()
-            valid_ids = {m["id"] for m in GROQ_FREE_MODELS}
+            valid_ids = {m["id"] for m in ALL_MODELS}
             if not model_id or model_id not in valid_ids:
                 self._json_response(400, {"error": f"unknown model: {model_id}"})
                 return

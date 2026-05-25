@@ -1,24 +1,19 @@
 """
-llm_client.py — LangChain/Groq-backed LLM client with per-agent token tracking.
+llm_client.py — Multi-provider LLM client (Groq + Google Gemini).
 
-Uses ChatGroq from langchain-groq for all LLM calls.
-Exposes the same .call() / .chat_completion() interface that every agent
-in agent_base.py uses — no agent files need to change.
+Provider priority:
+  1. Groq (GROQ_API_KEY)   — llama-4-scout → llama-3.1-8b → llama-3.3-70b
+  2. Gemini (GEMINI_API_KEY) — gemini-2.0-flash → gemini-1.5-flash → gemini-1.5-flash-8b
+     Auto-activated when all Groq models are exhausted.
 
-Token tracking:
-  Every call records input + output tokens against the calling agent name.
-  Counts are written to data/token_usage.json after each call so the dashboard
-  can display: model name, daily budget remaining, and per-agent usage.
+Rate-limit handling:
+  TPM limit (short wait ≤15 min) → sleep, retry same model.
+  TPD limit (long wait  >15 min) → switch to next model in chain.
+  All Groq exhausted + Gemini key present → switch to Gemini provider.
+  All providers exhausted → wait 30 min, reset, retry.
 
-Rate-limit handling (two-tier):
-  1. TPM (per-minute) limit — sleep for the exact retry time in the error message,
-     then retry the same call.  Maximum sleep: 15 minutes.
-  2. TPD (per-day) limit — when retry time > 15 min, switch to the next fallback
-     model in _FALLBACK_ORDER (each has its own independent 500k TPD budget).
-     If all fallback models are exhausted, raise the error.
-
-Provider: Groq (GROQ_API_KEY).
-Model: set in config.py (default: meta-llama/llama-4-scout-17b-16e-instruct).
+Token tracking written to data/token_usage.json after every call.
+Model status (active, exhausted, unavailable) written to data/model_status.json.
 """
 import datetime
 import json
@@ -35,116 +30,130 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 logger = logging.getLogger(__name__)
 
-# ── Known Groq free-tier token limits ────────────────────────────────────────
-# tpd = tokens per day, tpm = tokens per minute
-# These are approximate free-tier limits; actual limits may vary by account.
-_MODEL_LIMITS: Dict[str, Dict[str, int]] = {
-    "meta-llama/llama-4-scout-17b-16e-instruct":  {"tpd": 500_000, "tpm": 30_000},
-    "llama-3.1-8b-instant":                        {"tpd": 500_000, "tpm": 20_000},
-    "llama-3.3-70b-versatile":                     {"tpd": 100_000, "tpm": 12_000},
-    "deepseek-r1-distill-llama-70b":               {"tpd": 500_000, "tpm": 30_000},
-    "deepseek-r1-distill-qwen-32b":                {"tpd": 500_000, "tpm": 30_000},
-    "qwen-qwq-32b":                                {"tpd": 500_000, "tpm": 30_000},
+# ── Groq models (confirmed working on free tier) ──────────────────────────────
+_GROQ_LIMITS: Dict[str, Dict[str, int]] = {
+    "meta-llama/llama-4-scout-17b-16e-instruct": {"tpd": 500_000, "tpm": 30_000},
+    "llama-3.1-8b-instant":                       {"tpd": 500_000, "tpm": 20_000},
+    "llama-3.3-70b-versatile":                    {"tpd": 100_000, "tpm": 12_000},
 }
-_DEFAULT_LIMITS = {"tpd": 500_000, "tpm": 30_000}
-
-# Ordered fallback chain — when primary hits TPD/unavailable, switch to next.
-# Each model has its own independent daily token budget at Groq.
-# CONFIRMED DECOMMISSIONED (do not add back):
-#   - llama4-maverick: 404 (not on free tier)
-#   - gemma2-9b-it, mixtral-8x7b-32768, llama3-70b-8192, llama3-8b-8192: decommissioned
-_FALLBACK_ORDER = [
-    "meta-llama/llama-4-scout-17b-16e-instruct",  # primary   (30k TPM / 500k TPD)
-    "llama-3.1-8b-instant",                         # fallback1 (20k TPM / 500k TPD)
-    "llama-3.3-70b-versatile",                       # fallback2 (12k TPM / 100k TPD)
-    "deepseek-r1-distill-llama-70b",                 # fallback3 (newer Groq model)
-    "deepseek-r1-distill-qwen-32b",                  # fallback4 (newer Groq model)
-    "qwen-qwq-32b",                                  # fallback5 (newer Groq model)
+_GROQ_FALLBACK_ORDER = [
+    "meta-llama/llama-4-scout-17b-16e-instruct",  # primary   (500k TPD / 30k TPM)
+    "llama-3.1-8b-instant",                        # fallback1 (500k TPD / 20k TPM)
+    "llama-3.3-70b-versatile",                     # fallback2 (100k TPD / 12k TPM)
 ]
 
-# Max wait (seconds) for a per-minute rate limit before sleeping and retrying.
-# Anything longer than this is treated as a per-day limit → switch model.
-_MAX_TPM_SLEEP_SEC = 900   # 15 minutes
+# ── Gemini models (Google AI free tier) ───────────────────────────────────────
+# Free limits: 1,500 RPD / 1,000,000 TPD / 15 RPM per model
+_GEMINI_LIMITS: Dict[str, Dict[str, int]] = {
+    "gemini-2.0-flash":      {"tpd": 1_000_000, "tpm": 15},   # tpm = requests/min
+    "gemini-1.5-flash":      {"tpd": 1_000_000, "tpm": 15},
+    "gemini-1.5-flash-8b":   {"tpd": 1_000_000, "tpm": 15},
+}
+_GEMINI_FALLBACK_ORDER = [
+    "gemini-2.0-flash",      # newest, fastest
+    "gemini-1.5-flash",      # very reliable
+    "gemini-1.5-flash-8b",   # lightest
+]
 
-# When ALL fallback models are exhausted, wait this long before trying again
-# from the beginning of the chain (rolling 24h window will have freed some tokens).
-_RECOVERY_WAIT_SEC = 1800   # 30 minutes
-_MAX_RECOVERY_ATTEMPTS = 4   # give up after 4 full-chain retries (= 2 hours total)
+_ALL_MODEL_LIMITS = {**_GROQ_LIMITS, **_GEMINI_LIMITS}
+_DEFAULT_LIMITS   = {"tpd": 500_000, "tpm": 30_000}
+_ALL_MODELS       = _GROQ_FALLBACK_ORDER + _GEMINI_FALLBACK_ORDER
+
+# Rate-limit thresholds
+_MAX_TPM_SLEEP_SEC  = 900   # sleeps longer than this → treat as TPD, switch model
+_RECOVERY_WAIT_SEC  = 1800  # wait when ALL providers exhausted (30 min)
+_MAX_RECOVERY_ATTEMPTS = 4  # give up after 4 × 30 min = 2 hours
+
+
+def _is_gemini_model(model_name: str) -> bool:
+    return model_name.startswith("gemini")
 
 
 class LLMClient:
     """
-    Thin wrapper around ChatGroq that:
-      - Preserves the .call() / .chat_completion() interface used by all agents.
-      - Tracks token usage per agent and writes it to data/token_usage.json
-        so the dashboard can show daily budget remaining and per-agent breakdown.
+    Unified LLM client supporting Groq and Google Gemini.
 
-    LangChain handles:
-      - HTTP connection pooling
-      - Automatic retries with exponential backoff (max_retries)
-      - Rate-limit error handling
+    Same .call() / .chat_completion() interface — no agent changes needed.
+    Falls back automatically: Groq primary → Groq fallbacks → Gemini fallbacks.
     """
 
     _usage_lock = threading.Lock()
 
     def __init__(self, config):
         self.config = config
-        api_key = os.getenv("GROQ_API_KEY")
-        if not api_key:
-            raise EnvironmentError("GROQ_API_KEY not set.")
+        self._groq_key   = os.getenv("GROQ_API_KEY", "")
+        self._gemini_key = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
 
-        self._llm = ChatGroq(
-            model=config.model_name,
-            temperature=config.temperature,
-            api_key=api_key,
-            max_tokens=8192,
-            timeout=config.timeout_seconds,
-            max_retries=2,   # only for transient network errors; 429 handled below
-        )
-        self._api_key = api_key
-        # Track which fallback models have already been exhausted this session.
-        # Two separate buckets so the dashboard can show different colours.
-        self._exhausted_models: set = set()   # merged set used by retry loop
-        self._tpd_exhausted: set = set()      # ran out of daily tokens
-        self._unavailable: set = set()        # 404 / decommissioned
+        if not self._groq_key and not self._gemini_key:
+            raise EnvironmentError("Neither GROQ_API_KEY nor GEMINI_API_KEY is set.")
 
-        # ── Token usage tracking (resets daily) ──────────────────────────────
-        self._usage_date: str = datetime.date.today().isoformat()
-        self._per_agent: Dict[str, Dict] = {}   # {agent_name: {tokens, calls}}
-        self._total_tokens: int = 0
-        self._limits = _MODEL_LIMITS.get(config.model_name, _DEFAULT_LIMITS)
+        # Track exhausted/unavailable models across both providers
+        self._exhausted_models: set = set()
+        self._tpd_exhausted:    set = set()
+        self._unavailable:      set = set()
+        self._retry_after: Dict[str, str] = {}
 
-        # Resolve project root to locate data/ directory
+        # Token usage tracking
+        self._usage_date:   str  = datetime.date.today().isoformat()
+        self._per_agent:    Dict = {}
+        self._total_tokens: int  = 0
+        self._limits = _ALL_MODEL_LIMITS.get(config.model_name, _DEFAULT_LIMITS)
+        self._provider = "gemini" if _is_gemini_model(config.model_name) else "groq"
+
+        # Resolve project root
         gen_dir = Path(__file__).resolve().parent
         project_root = (
             gen_dir.parent.parent
             if gen_dir.parent.name == "generations"
             else gen_dir.parent
         )
-        self._token_file = project_root / "data" / "token_usage.json"
+        self._token_file  = project_root / "data" / "token_usage.json"
         self._status_file = project_root / "data" / "model_status.json"
 
+        # Initialise the LLM backend
+        self._llm = self._build_llm(config.model_name)
+
         logger.info(
-            f"[llm_client] ChatGroq initialised — "
-            f"model={config.model_name} temperature={config.temperature} "
-            f"budget={self._limits['tpd']:,} TPD / {self._limits['tpm']:,} TPM"
+            f"[llm_client] Initialised — provider={self._provider} "
+            f"model={config.model_name} "
+            f"budget={self._limits['tpd']:,} TPD"
+            + (f" / {self._limits['tpm']:,} TPM" if self._provider == "groq" else " / 15 RPM")
+            + (f" | Gemini fallback: {'enabled' if self._gemini_key else 'no key'}")
         )
-        # Write initial status so the dashboard shows the active model immediately
         self._flush_model_status()
+
+    # ── LLM factory ──────────────────────────────────────────────────────────
+
+    def _build_llm(self, model_name: str):
+        """Build the right LangChain LLM object for the given model name."""
+        if _is_gemini_model(model_name):
+            if not self._gemini_key:
+                raise EnvironmentError(f"GEMINI_API_KEY not set — cannot use {model_name}")
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            return ChatGoogleGenerativeAI(
+                model=model_name,
+                google_api_key=self._gemini_key,
+                temperature=self.config.temperature,
+                max_output_tokens=8192,
+                timeout=self.config.timeout_seconds,
+                max_retries=2,
+            )
+        else:
+            if not self._groq_key:
+                raise EnvironmentError(f"GROQ_API_KEY not set — cannot use {model_name}")
+            return ChatGroq(
+                model=model_name,
+                temperature=self.config.temperature,
+                api_key=self._groq_key,
+                max_tokens=8192,
+                timeout=self.config.timeout_seconds,
+                max_retries=2,
+            )
 
     # ── Public interface ──────────────────────────────────────────────────────
 
     def call(self, prompt: str, agent_name: str = "") -> str:
-        """
-        Send a single user prompt and return the response text.
-
-        Handles Groq rate limits automatically:
-          - TPM (per-minute): sleep for the retry duration, then retry.
-          - TPD (per-day): switch to next fallback model; retry immediately.
-
-        agent_name: the calling agent's ID (e.g. 'analyst', 'coder').
-                    Used for per-agent token tracking in the dashboard.
-        """
+        """Send a single user prompt and return the response text."""
         logger.debug(f"[llm_client] call() agent={agent_name or '?'} len={len(prompt)}")
         return self._invoke_with_retry([HumanMessage(content=prompt)], agent_name or "unknown")
 
@@ -154,11 +163,7 @@ class LLMClient:
         response_format: Optional[Dict] = None,
         agent_name: str = "",
     ) -> str:
-        """
-        Multi-turn chat interface.
-        response_format is ignored (Groq handles JSON mode separately).
-        agent_name: same as in call() — for dashboard token tracking.
-        """
+        """Multi-turn chat interface."""
         lc_messages = []
         for msg in messages:
             role    = msg.get("role", "user")
@@ -167,33 +172,28 @@ class LLMClient:
                 lc_messages.append(SystemMessage(content=content))
             else:
                 lc_messages.append(HumanMessage(content=content))
-
         return self._invoke_with_retry(lc_messages, agent_name or "unknown")
 
-    def _invoke_with_retry(self, lc_messages, agent_name: str) -> str:
-        """
-        Invoke the LLM with automatic rate-limit handling.
+    # ── Retry / fallback logic ────────────────────────────────────────────────
 
-        Strategy:
-          1. On 429 with retry_time <= _MAX_TPM_SLEEP_SEC → sleep, same model.
-          2. On 429 with retry_time >  _MAX_TPM_SLEEP_SEC → mark model exhausted,
-             switch to next fallback, retry immediately.
-          3. If no fallbacks remain → re-raise so callers can handle it.
-        """
-        # Outer loop: allow full-chain retries after a recovery wait
+    def _invoke_with_retry(self, lc_messages, agent_name: str) -> str:
+        all_models = self._build_fallback_chain()
+
         for recovery_attempt in range(_MAX_RECOVERY_ATTEMPTS):
-            # Inner loop: try each model in the fallback chain
-            for attempt in range(len(_FALLBACK_ORDER) + 4):
+            for attempt in range(len(all_models) + 4):
                 try:
                     response = self._llm.invoke(lc_messages)
                     self._record_usage(agent_name, response)
                     return response.content
+
                 except Exception as exc:
                     err_str = str(exc)
                     is_rate_limit = (
                         "429" in err_str
                         or "rate_limit_exceeded" in err_str
                         or "RateLimitError" in type(exc).__name__
+                        or "quota" in err_str.lower()
+                        or "resource_exhausted" in err_str.lower()
                     )
                     is_unavailable = (
                         "404" in err_str
@@ -202,127 +202,90 @@ class LLMClient:
                         or "model_decommissioned" in err_str
                         or "decommissioned" in err_str.lower()
                         or "no longer supported" in err_str.lower()
+                        or "not found" in err_str.lower()
                     )
+
+                    current_model = self.config.model_name
 
                     if is_rate_limit:
                         retry_sec = self._parse_retry_seconds(err_str)
-                        current_model = self.config.model_name
                         logger.debug(
-                            f"[llm_client] 429 on {current_model} — "
-                            f"retry_sec={retry_sec:.0f} | raw_msg={err_str[:200]}"
+                            f"[llm_client] rate-limit on {current_model} — "
+                            f"retry_sec={retry_sec:.0f}"
                         )
-
                         if retry_sec <= _MAX_TPM_SLEEP_SEC:
-                            # TPM (per-minute) limit — sleep and retry same model
                             sleep_time = retry_sec + 5
                             logger.warning(
-                                f"[llm_client] TPM rate limit on {current_model} — "
-                                f"sleeping {sleep_time:.0f}s (attempt {attempt+1})"
+                                f"[llm_client] TPM limit on {current_model} — "
+                                f"sleeping {sleep_time:.0f}s"
                             )
                             time.sleep(sleep_time)
                         else:
-                            # TPD (per-day) exhausted — switch to next fallback
+                            # TPD exhausted — mark and switch
                             self._exhausted_models.add(current_model)
                             self._tpd_exhausted.add(current_model)
+                            recover_at = (
+                                datetime.datetime.utcnow()
+                                + datetime.timedelta(seconds=retry_sec)
+                            ).isoformat() + "Z"
+                            self._retry_after[current_model] = recover_at
                             self._flush_model_status()
                             logger.warning(
                                 f"[llm_client] TPD exhausted on {current_model} "
-                                f"(retry in {retry_sec:.0f}s) — switching fallback"
+                                f"(recovers ~{recover_at}) — switching"
                             )
                             if not self._switch_to_next_model():
-                                break  # all models exhausted → go to recovery wait
+                                break
 
                     elif is_unavailable:
-                        bad_model = self.config.model_name
-                        self._exhausted_models.add(bad_model)
-                        self._unavailable.add(bad_model)
+                        self._exhausted_models.add(current_model)
+                        self._unavailable.add(current_model)
                         self._flush_model_status()
                         logger.warning(
-                            f"[llm_client] Model {bad_model} unavailable/decommissioned — "
-                            f"switching to next fallback"
+                            f"[llm_client] {current_model} unavailable — switching"
                         )
                         if not self._switch_to_next_model():
-                            break  # all models exhausted → go to recovery wait
+                            break
                     else:
-                        raise  # real error — propagate immediately
+                        raise
             else:
-                # Inner loop finished normally (shouldn't happen) — break outer
                 break
 
-            # ── All fallback models exhausted ────────────────────────────────
-            # Wait for the Groq rolling 24h window to free up some tokens,
-            # then reset and try from the primary model again.
+            # All models exhausted — wait then reset
             logger.warning(
-                f"[llm_client] All Groq models exhausted "
-                f"(tried: {self._exhausted_models}). "
-                f"Waiting {_RECOVERY_WAIT_SEC}s for token budget to partially recover "
-                f"(recovery attempt {recovery_attempt+1}/{_MAX_RECOVERY_ATTEMPTS})..."
+                f"[llm_client] All models exhausted (tried: {self._exhausted_models}). "
+                f"Waiting {_RECOVERY_WAIT_SEC}s "
+                f"(attempt {recovery_attempt+1}/{_MAX_RECOVERY_ATTEMPTS})..."
             )
             time.sleep(_RECOVERY_WAIT_SEC)
-            # Reset exhausted set — tokens from 30min ago have rolled off the 24h window
             self._exhausted_models.clear()
-            if not self._switch_to_next_model():
-                # Switch to primary explicitly
-                self._switch_to_model(_FALLBACK_ORDER[0])
+            # Restart from beginning of chain
+            first = self._build_fallback_chain()[0]
+            self._switch_to_model(first)
 
         raise RuntimeError(
-            f"[llm_client] All Groq models exhausted after {_MAX_RECOVERY_ATTEMPTS} "
-            f"recovery attempts ({_MAX_RECOVERY_ATTEMPTS * _RECOVERY_WAIT_SEC / 3600:.1f}h total). "
-            f"Last tried: {self._exhausted_models}"
+            f"[llm_client] All providers exhausted after {_MAX_RECOVERY_ATTEMPTS} "
+            f"recovery attempts. Last tried: {self._exhausted_models}"
         )
 
-    def _parse_retry_seconds(self, error_msg: str) -> float:
-        """
-        Parse Groq retry-after strings → total seconds.
-        Handles all known formats:
-          "13m3.8208s"    → 783s
-          "8h32m11.2s"   → 30731s
-          "8h32m"        → 30720s
-          "8h"           → 28800s
-          "45.5s"        → 45.5s
-        Returns _MAX_TPM_SLEEP_SEC + 1 (forces model switch) if unparseable.
-        """
-        # "Xh Ym Zs" — hours + minutes + seconds
-        m = re.search(r"try again in (\d+)h(\d+)m(\d+(?:\.\d+)?)s", error_msg)
-        if m:
-            return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
-        # "Xh Ym" — hours + minutes only
-        m = re.search(r"try again in (\d+)h(\d+)m\b", error_msg)
-        if m:
-            return int(m.group(1)) * 3600 + int(m.group(2)) * 60
-        # "Xh" — hours only
-        m = re.search(r"try again in (\d+)h\b", error_msg)
-        if m:
-            return int(m.group(1)) * 3600
-        # "Xm Y.Zs" — minutes + seconds
-        m = re.search(r"try again in (\d+)m(\d+(?:\.\d+)?)s", error_msg)
-        if m:
-            return int(m.group(1)) * 60 + float(m.group(2))
-        # "X.Ys" — seconds only
-        m = re.search(r"try again in (\d+(?:\.\d+)?)s", error_msg)
-        if m:
-            return float(m.group(1))
-        # Unknown format — log the raw message and treat as long wait (switch model)
-        logger.debug(f"[llm_client] Could not parse retry time from: {error_msg[:300]}")
-        return _MAX_TPM_SLEEP_SEC + 1
+    def _build_fallback_chain(self) -> List[str]:
+        """Return ordered model list: Groq models first, then Gemini if key present."""
+        chain = list(_GROQ_FALLBACK_ORDER)
+        if self._gemini_key:
+            chain.extend(_GEMINI_FALLBACK_ORDER)
+        return chain
 
     def _switch_to_model(self, model_name: str) -> bool:
-        """Switch to a specific model by name. Returns True on success."""
+        """Switch to a specific model. Returns True on success."""
         try:
             old_model = self.config.model_name
-            self._llm = ChatGroq(
-                model=model_name,
-                temperature=self.config.temperature,
-                api_key=self._api_key,
-                max_tokens=8192,
-                timeout=self.config.timeout_seconds,
-                max_retries=2,
-            )
+            self._llm = self._build_llm(model_name)
             self.config.model_name = model_name
-            self._limits = _MODEL_LIMITS.get(model_name, _DEFAULT_LIMITS)
+            self._provider = "gemini" if _is_gemini_model(model_name) else "groq"
+            self._limits = _ALL_MODEL_LIMITS.get(model_name, _DEFAULT_LIMITS)
             logger.info(
-                f"[llm_client] ✓ Switched model: {old_model} → {model_name} "
-                f"(budget: {self._limits['tpd']:,} TPD / {self._limits['tpm']:,} TPM)"
+                f"[llm_client] ✓ Switched: {old_model} → {model_name} "
+                f"[{self._provider}] ({self._limits['tpd']:,} TPD)"
             )
             self._flush_model_status()
             return True
@@ -332,35 +295,49 @@ class LLMClient:
             return False
 
     def _switch_to_next_model(self) -> bool:
-        """
-        Switch self._llm to the next non-exhausted model in _FALLBACK_ORDER.
-        Returns True if a switch was made, False if all models are exhausted.
-        """
-        for model_name in _FALLBACK_ORDER:
+        """Switch to the next non-exhausted model in the full fallback chain."""
+        for model_name in self._build_fallback_chain():
             if model_name not in self._exhausted_models:
                 if self._switch_to_model(model_name):
                     return True
         return False
 
+    # ── Retry time parser ─────────────────────────────────────────────────────
+
+    def _parse_retry_seconds(self, error_msg: str) -> float:
+        """Parse Groq/Gemini retry-after strings → total seconds."""
+        # "Xh Ym Zs"
+        m = re.search(r"try again in (\d+)h(\d+)m(\d+(?:\.\d+)?)s", error_msg)
+        if m:
+            return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+        # "Xh Ym"
+        m = re.search(r"try again in (\d+)h(\d+)m\b", error_msg)
+        if m:
+            return int(m.group(1)) * 3600 + int(m.group(2)) * 60
+        # "Xh"
+        m = re.search(r"try again in (\d+)h\b", error_msg)
+        if m:
+            return int(m.group(1)) * 3600
+        # "Xm Y.Zs"
+        m = re.search(r"try again in (\d+)m(\d+(?:\.\d+)?)s", error_msg)
+        if m:
+            return int(m.group(1)) * 60 + float(m.group(2))
+        # "X.Ys"
+        m = re.search(r"try again in (\d+(?:\.\d+)?)s", error_msg)
+        if m:
+            return float(m.group(1))
+        # Gemini quota errors rarely include retry time — treat as TPD
+        logger.debug(f"[llm_client] Cannot parse retry time: {error_msg[:200]}")
+        return _MAX_TPM_SLEEP_SEC + 1
+
     # ── Token tracking ────────────────────────────────────────────────────────
 
     def _record_usage(self, agent_name: str, response) -> None:
-        """
-        Extract token counts from the ChatGroq AIMessage response and accumulate.
-
-        langchain-core 0.3+ puts them in response.usage_metadata:
-          {"input_tokens": N, "output_tokens": N, "total_tokens": N}
-        Groq also sets response.response_metadata["token_usage"]["total_tokens"].
-        """
         try:
             tokens = 0
-
-            # Primary: langchain-core standard attribute
             meta = getattr(response, "usage_metadata", None) or {}
             tokens = int(meta.get("total_tokens", 0) or 0)
-
             if not tokens:
-                # Fallback: Groq-specific response_metadata
                 rmeta = getattr(response, "response_metadata", None) or {}
                 usage = rmeta.get("token_usage", {})
                 tokens = int(usage.get("total_tokens", 0) or 0)
@@ -368,66 +345,52 @@ class LLMClient:
             with self._usage_lock:
                 today = datetime.date.today().isoformat()
                 if today != self._usage_date:
-                    # Day rolled over — reset counters
-                    self._per_agent = {}
+                    self._per_agent    = {}
                     self._total_tokens = 0
-                    self._usage_date = today
-
-                entry = self._per_agent.setdefault(
-                    agent_name, {"tokens": 0, "calls": 0}
-                )
+                    self._usage_date   = today
+                entry = self._per_agent.setdefault(agent_name, {"tokens": 0, "calls": 0})
                 entry["tokens"] += tokens
                 entry["calls"]  += 1
                 self._total_tokens += tokens
 
             self._flush_usage()
-
         except Exception as exc:
             logger.debug(f"[llm_client] token tracking error (non-fatal): {exc}")
 
     def _flush_usage(self) -> None:
-        """Write current token usage to data/token_usage.json for the dashboard."""
         try:
             tpd = self._limits["tpd"]
             tpm = self._limits["tpm"]
-
             with self._usage_lock:
                 data = {
-                    "model":               self.config.model_name,
-                    "provider":            "groq",
-                    "date":                self._usage_date,
-                    "daily_limit_tokens":  tpd,
-                    "tpm_limit":           tpm,
-                    "total_tokens_used":   self._total_tokens,
-                    "tokens_remaining":    max(0, tpd - self._total_tokens),
-                    "pct_used":            round(self._total_tokens / tpd, 4) if tpd else 0,
-                    "per_agent":           dict(self._per_agent),
-                    "last_updated":        datetime.datetime.utcnow().isoformat() + "Z",
+                    "model":              self.config.model_name,
+                    "provider":           self._provider,
+                    "date":               self._usage_date,
+                    "daily_limit_tokens": tpd,
+                    "tpm_limit":          tpm,
+                    "total_tokens_used":  self._total_tokens,
+                    "tokens_remaining":   max(0, tpd - self._total_tokens),
+                    "pct_used":           round(self._total_tokens / tpd, 4) if tpd else 0,
+                    "per_agent":          dict(self._per_agent),
+                    "last_updated":       datetime.datetime.utcnow().isoformat() + "Z",
                 }
-
             self._token_file.parent.mkdir(parents=True, exist_ok=True)
             self._token_file.write_text(json.dumps(data, indent=2))
-
         except Exception as exc:
             logger.debug(f"[llm_client] token_usage flush error (non-fatal): {exc}")
 
     def _flush_model_status(self) -> None:
-        """
-        Write data/model_status.json so the dashboard can show per-model availability.
-
-        Schema:
-          active      — model currently being used
-          all_models  — ordered fallback list
-          tpd_exhausted — models that hit their daily token limit
-          unavailable   — models that returned 404 / decommissioned
-          last_updated  — ISO timestamp
-        """
         try:
             data = {
                 "active":        self.config.model_name,
-                "all_models":    _FALLBACK_ORDER,
+                "provider":      self._provider,
+                "all_models":    self._build_fallback_chain(),
+                "groq_models":   _GROQ_FALLBACK_ORDER,
+                "gemini_models": _GEMINI_FALLBACK_ORDER if self._gemini_key else [],
                 "tpd_exhausted": sorted(self._tpd_exhausted),
                 "unavailable":   sorted(self._unavailable),
+                "retry_after":   dict(self._retry_after),
+                "gemini_enabled": bool(self._gemini_key),
                 "last_updated":  datetime.datetime.utcnow().isoformat() + "Z",
             }
             self._status_file.parent.mkdir(parents=True, exist_ok=True)
