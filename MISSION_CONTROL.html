@@ -66,12 +66,21 @@
       overflow:hidden;border:1px solid rgba(255,255,255,.06);position:relative}
     .big-bar-fill{height:100%;border-radius:10px;position:relative;
       background:linear-gradient(90deg,var(--cyan),var(--magenta));
-      transition:width 1s cubic-bezier(.4,0,.2,1);
+      transition:width .8s cubic-bezier(.4,0,.2,1);
       box-shadow:0 0 20px rgba(0,243,255,.4)}
     .big-bar-fill::after{content:'';position:absolute;inset:0;
-      background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.3) 50%,transparent 100%);
-      animation:shimmer 2s infinite}
-    @keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)} }
+      background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.35) 50%,transparent 100%);
+      animation:shimmer 1.6s infinite}
+    /* Working sub-bar: shows intra-task phase progress in a ghost colour */
+    .big-bar-inprogress{height:100%;border-radius:10px;position:absolute;top:0;left:0;
+      background:linear-gradient(90deg,rgba(0,243,255,.25),rgba(255,0,255,.15));
+      transition:width .8s cubic-bezier(.4,0,.2,1);pointer-events:none}
+    @keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(200%)} }
+    /* Pulse glow on bar track when actively working */
+    .big-bar-track.working{box-shadow:0 0 0 1px rgba(0,243,255,.2),0 0 18px rgba(0,243,255,.12);
+      animation:trackpulse 2s ease-in-out infinite}
+    @keyframes trackpulse{0%,100%{box-shadow:0 0 0 1px rgba(0,243,255,.2),0 0 12px rgba(0,243,255,.1)}
+      50%{box-shadow:0 0 0 1px rgba(0,243,255,.4),0 0 24px rgba(0,243,255,.25)}}
     .seg-labels{display:flex;justify-content:space-between;margin-top:6px}
     .seg-label{font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
 
@@ -174,22 +183,28 @@
       border-radius:6px;cursor:pointer}
     .code-copy-btn:hover{background:rgba(0,243,255,.25)}
     /* ── Task phase progress bar ── */
-    .phase-bar-wrap{margin-top:14px}
-    .phase-bar-label{font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+    .phase-bar-wrap{margin-top:14px;padding:12px 14px;border-radius:12px;
+      border:1px solid rgba(0,243,255,.12);background:rgba(0,243,255,.03)}
+    .phase-bar-label{font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+    .phase-bar-task-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .phase-bar-task-id{font-size:.65rem;color:var(--cyan);font-family:var(--mono);
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%}
+    .phase-bar-elapsed{font-size:.62rem;color:#fbbf24;font-family:var(--mono);font-weight:700}
     .phase-steps{display:flex;align-items:flex-start;gap:0;overflow-x:auto}
-    .phase-step{flex:1;min-width:52px;text-align:center;padding:6px 2px 4px;
-      border-top:2px solid rgba(255,255,255,.08);cursor:default;transition:.3s}
-    .phase-step.ps-done{border-top-color:var(--lime)}
-    .phase-step.ps-active{border-top-color:var(--cyan)}
-    .phase-step.ps-skip{opacity:.2}
-    .phase-step-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.12);
+    .phase-step{flex:1;min-width:52px;text-align:center;padding:8px 2px 5px;
+      border-top:3px solid rgba(255,255,255,.08);cursor:default;transition:.3s}
+    .phase-step.ps-done{border-top-color:var(--lime);opacity:.8}
+    .phase-step.ps-active{border-top-color:var(--cyan);
+      background:rgba(0,243,255,.06);border-radius:0 0 6px 6px}
+    .phase-step.ps-skip{opacity:.18}
+    .phase-step-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.12);
       margin:0 auto 4px;transition:.3s}
     .phase-step.ps-done .phase-step-dot{background:var(--lime)}
-    .phase-step.ps-active .phase-step-dot{background:var(--cyan);box-shadow:0 0 8px var(--cyan);
+    .phase-step.ps-active .phase-step-dot{background:var(--cyan);box-shadow:0 0 12px var(--cyan);
       animation:dotPulse 1.2s infinite}
-    .phase-step-txt{font-size:.48rem;color:var(--dim);line-height:1.3;transition:.3s}
+    .phase-step-txt{font-size:.5rem;color:var(--dim);line-height:1.3;transition:.3s;margin-top:3px}
     .phase-step.ps-done .phase-step-txt{color:var(--lime)}
-    .phase-step.ps-active .phase-step-txt{color:var(--cyan);font-weight:700}
+    .phase-step.ps-active .phase-step-txt{color:var(--cyan);font-weight:800;font-size:.54rem}
     @keyframes dotPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.6);opacity:.6}}
 
     /* ── Topology node diagram ── */
@@ -578,7 +593,8 @@
             <span class="progress-total" id="pbar-total"> / 0</span>
           </div>
         </div>
-        <div class="big-bar-track">
+        <div class="big-bar-track" id="big-bar-track">
+          <div class="big-bar-inprogress" id="big-bar-inprogress" style="width:0%"></div>
           <div class="big-bar-fill" id="big-bar-fill" style="width:0%"></div>
         </div>
         <div class="seg-bars" id="seg-bars">
@@ -593,7 +609,11 @@
 
       <!-- Task phase progress bar -->
       <div class="phase-bar-wrap" id="phase-bar-wrap" style="display:none">
-        <div class="phase-bar-label">Current Task — <span id="phase-task-id" style="color:var(--cyan)"></span></div>
+        <div class="phase-bar-task-row">
+          <div class="phase-bar-task-id" id="phase-task-id"></div>
+          <div class="phase-bar-elapsed" id="phase-bar-elapsed"></div>
+        </div>
+        <div class="phase-bar-label">Agent pipeline</div>
         <div class="phase-steps" id="phase-steps"></div>
       </div>
 
@@ -870,6 +890,14 @@ var STATE={heartbeat:null,evolutionLog:[],benchmarkMatrix:null,activeGen:null,
 };
 var PREV_TASK='';
 var TASK_START=null;
+var TASK_PHASE_START=null;  // when current task started (for elapsed timer)
+
+// Fraction of a task represented by each phase (0→1 across the pipeline)
+var PHASE_FRACTION={
+  'thinking':0.15, 'writing_unit_tests':0.30, 'writing_code':0.55,
+  'reviewing':0.65, 'revising':0.72, 'compiling':0.85,
+  'running_unit_tests':0.92, 'debugging':0.96, 'running_integration_tests':0.99
+};
 var COLORS=['#00f3ff','#ff00ff','#39ff14','#ffb300','#ff3131','#a78bfa','#fb7185'];
 
 async function loadJSON(p){
@@ -1148,8 +1176,12 @@ function renderPhaseSteps(currentPhase,topo){
     var optional=(p.agent==='test_writer'||p.agent==='critic'||p.agent==='reviser'||p.agent==='debugger');
     var enabled=!optional||(topo[agentKey]===true||topo[agentKey]==='true');
     var cls=!enabled?'ps-skip':i<activeIdx?'ps-done':i===activeIdx?'ps-active':'';
+    var dotHtml=i===activeIdx&&enabled
+      ? '<div class="spinner spinner-cyan spinner-sm" style="margin:0 auto 2px"></div>'
+      : '<div class="phase-step-dot"></div>';
+    var doneCheck=i<activeIdx&&enabled?'<div style="font-size:.55rem;color:var(--lime)">✓</div>':'';
     return '<div class="phase-step '+cls+'">'+
-      '<div class="phase-step-dot"></div>'+
+      dotHtml+doneCheck+
       '<div class="phase-step-txt">'+p.label+'</div>'+
     '</div>';
   }).join('');
@@ -1252,10 +1284,24 @@ function renderHero(){
   var pct=total?done/total:0;
   var passed=hb.passed_so_far||0, failed=hb.failed_so_far||0, pending=Math.max(0,total-done);
 
-  // Big bar
+  // Big bar — completed tasks
   document.getElementById('pbar-done').textContent=done;
   document.getElementById('pbar-total').textContent=' / '+total;
   document.getElementById('big-bar-fill').style.width=pct2str(pct);
+
+  // Sub-progress bar: shows phase fraction of current in-progress task
+  var track=document.getElementById('big-bar-track');
+  var inprog=document.getElementById('big-bar-inprogress');
+  if(inprog&&track&&total>0&&hb.status==='RUNNING'&&done<total){
+    var phaseFrac=PHASE_FRACTION[hb.current_phase||'']||0;
+    // Position ghost bar: completed tasks + phase_fraction of next task
+    var subPct=(done+phaseFrac)/total;
+    inprog.style.width=pct2str(Math.max(subPct,pct));
+    track.classList.add('working');
+  } else {
+    if(inprog)inprog.style.width=pct2str(pct);
+    if(track)track.classList.remove('working');
+  }
 
   // Segmented bar
   if(total>0){
@@ -1333,15 +1379,21 @@ function renderHero(){
     actWrap.style.display='none';
   }
 
-  // Task phase progress bar
+  // Task phase progress bar + elapsed timer
   var phaseBarWrap=document.getElementById('phase-bar-wrap');
   var phaseTaskId=document.getElementById('phase-task-id');
   var phaseSteps=document.getElementById('phase-steps');
+  var phaseElapsed=document.getElementById('phase-bar-elapsed');
   if(hb.status==='RUNNING'&&hb.active_task_id){
     phaseBarWrap.style.display='block';
+    // Task elapsed timer
+    if(hb.active_task_id!==PREV_TASK){TASK_PHASE_START=Date.now();}
+    var elapsedSec=TASK_PHASE_START?Math.floor((Date.now()-TASK_PHASE_START)/1000):0;
+    var em=Math.floor(elapsedSec/60), es=elapsedSec%60;
+    if(phaseElapsed)phaseElapsed.textContent=(em>0?em+'m ':'')+es+'s';
     var progress2=STATE.genProgress[hb.active_gen]||{};
     var descs2=progress2.descriptions||{};
-    phaseTaskId.textContent=descs2[hb.active_task_id]||hb.active_task_id;
+    phaseTaskId.textContent='▶ '+(descs2[hb.active_task_id]||hb.active_task_id);
     phaseSteps.innerHTML=renderPhaseSteps(hb.current_phase,hb.topology||{});
   } else {
     phaseBarWrap.style.display='none';
