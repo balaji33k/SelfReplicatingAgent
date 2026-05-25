@@ -455,6 +455,12 @@
         <div class="phase-steps" id="phase-steps"></div>
       </div>
 
+      <!-- Pipeline Topology — inline inside hero card -->
+      <div id="topology-inline" style="display:none;margin-top:16px">
+        <div style="font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">🔧 Pipeline Topology — Generation <span id="topo-gen-num">1</span></div>
+        <div id="topology-content"></div>
+      </div>
+
       <!-- Live ticker -->
       <div class="ticker-wrap" id="ticker-wrap">
         <div class="ticker-dot" id="ticker-dot"></div>
@@ -487,12 +493,6 @@
           <div class="mini-label">Generation</div>
         </div>
       </div>
-    </div>
-
-    <!-- TOPOLOGY — inline below hero -->
-    <div class="card" id="topology-card" style="display:none">
-      <div class="card-title">🔧 Pipeline Topology — Generation <span id="topo-gen-num">1</span></div>
-      <div id="topology-content"></div>
     </div>
 
     <!-- TASK SUMMARY + CODE TABS -->
@@ -738,9 +738,9 @@ var PHASE_TO_AGENT={
 
 function renderTopology(){
   var hb=STATE.heartbeat;
-  var card=document.getElementById('topology-card');
-  if(!hb||!hb.topology||!Object.keys(hb.topology).length){card.style.display='none';return;}
-  card.style.display='block';
+  var wrap=document.getElementById('topology-inline');
+  if(!hb||!hb.topology||!Object.keys(hb.topology).length){wrap.style.display='none';return;}
+  wrap.style.display='block';
   document.getElementById('topo-gen-num').textContent=hb.active_gen;
   var t=hb.topology;
   var activeAgent=PHASE_TO_AGENT[hb.current_phase]||'';
