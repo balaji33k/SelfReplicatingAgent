@@ -593,8 +593,15 @@
             <span class="progress-total" id="pbar-total"> / 0</span>
           </div>
         </div>
+        <!-- Status line above bar — shows exactly what's happening right now -->
+        <div id="live-status-line" style="display:none;margin-bottom:6px;
+          font-size:.72rem;font-family:monospace;color:#00f3ff;
+          display:flex;align-items:center;gap:8px">
+          <div class="spinner spinner-cyan spinner-sm"></div>
+          <span id="live-status-text"></span>
+        </div>
+
         <div class="big-bar-track" id="big-bar-track">
-          <div class="big-bar-inprogress" id="big-bar-inprogress" style="width:0%"></div>
           <div class="big-bar-fill" id="big-bar-fill" style="width:0%"></div>
         </div>
         <div class="seg-bars" id="seg-bars">
@@ -607,13 +614,8 @@
         </div>
       </div>
 
-      <!-- Task phase progress bar -->
+      <!-- Phase steps strip -->
       <div class="phase-bar-wrap" id="phase-bar-wrap" style="display:none">
-        <div class="phase-bar-task-row">
-          <div class="phase-bar-task-id" id="phase-task-id"></div>
-          <div class="phase-bar-elapsed" id="phase-bar-elapsed"></div>
-        </div>
-        <div class="phase-bar-label">Agent pipeline</div>
         <div class="phase-steps" id="phase-steps"></div>
       </div>
 
@@ -1284,23 +1286,38 @@ function renderHero(){
   var pct=total?done/total:0;
   var passed=hb.passed_so_far||0, failed=hb.failed_so_far||0, pending=Math.max(0,total-done);
 
-  // Big bar — completed tasks
+  // Real progress bar — only completed tasks, no faking
   document.getElementById('pbar-done').textContent=done;
   document.getElementById('pbar-total').textContent=' / '+total;
   document.getElementById('big-bar-fill').style.width=pct2str(pct);
 
-  // Sub-progress bar: shows phase fraction of current in-progress task
+  // Track pulse glow when actively working
   var track=document.getElementById('big-bar-track');
-  var inprog=document.getElementById('big-bar-inprogress');
-  if(inprog&&track&&total>0&&hb.status==='RUNNING'&&done<total){
-    var phaseFrac=PHASE_FRACTION[hb.current_phase||'']||0;
-    // Position ghost bar: completed tasks + phase_fraction of next task
-    var subPct=(done+phaseFrac)/total;
-    inprog.style.width=pct2str(Math.max(subPct,pct));
-    track.classList.add('working');
-  } else {
-    if(inprog)inprog.style.width=pct2str(pct);
-    if(track)track.classList.remove('working');
+  if(track){
+    if(hb.status==='RUNNING')track.classList.add('working');
+    else track.classList.remove('working');
+  }
+
+  // Live status line above the bar
+  var statusLine=document.getElementById('live-status-line');
+  var statusText=document.getElementById('live-status-text');
+  if(statusLine&&statusText){
+    if(hb.status==='RUNNING'&&hb.active_task_id){
+      var pLabel=phaseLabel(hb.current_phase||'thinking');
+      var ms=STATE.modelStatus||{};
+      var modelName=ms.active||(STATE.tokenUsage&&STATE.tokenUsage.model)||'';
+      var shortModel=modelName.split('/').pop().replace('meta-llama-','');
+      statusLine.style.display='flex';
+      statusText.textContent=pLabel+' — '+hb.active_task_id+(shortModel?' ['+shortModel+']':'');
+    } else if(hb.status==='ANALYSING'){
+      statusLine.style.display='flex';
+      statusText.textContent='Analysing results — preparing next generation…';
+    } else if(hb.status==='SPAWNING'){
+      statusLine.style.display='flex';
+      statusText.textContent='Spawning Generation '+(hb.active_gen+1)+'…';
+    } else {
+      statusLine.style.display='none';
+    }
   }
 
   // Segmented bar
@@ -1379,21 +1396,11 @@ function renderHero(){
     actWrap.style.display='none';
   }
 
-  // Task phase progress bar + elapsed timer
+  // Phase step strip
   var phaseBarWrap=document.getElementById('phase-bar-wrap');
-  var phaseTaskId=document.getElementById('phase-task-id');
   var phaseSteps=document.getElementById('phase-steps');
-  var phaseElapsed=document.getElementById('phase-bar-elapsed');
   if(hb.status==='RUNNING'&&hb.active_task_id){
     phaseBarWrap.style.display='block';
-    // Task elapsed timer
-    if(hb.active_task_id!==PREV_TASK){TASK_PHASE_START=Date.now();}
-    var elapsedSec=TASK_PHASE_START?Math.floor((Date.now()-TASK_PHASE_START)/1000):0;
-    var em=Math.floor(elapsedSec/60), es=elapsedSec%60;
-    if(phaseElapsed)phaseElapsed.textContent=(em>0?em+'m ':'')+es+'s';
-    var progress2=STATE.genProgress[hb.active_gen]||{};
-    var descs2=progress2.descriptions||{};
-    phaseTaskId.textContent='▶ '+(descs2[hb.active_task_id]||hb.active_task_id);
     phaseSteps.innerHTML=renderPhaseSteps(hb.current_phase,hb.topology||{});
   } else {
     phaseBarWrap.style.display='none';
