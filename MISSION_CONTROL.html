@@ -332,6 +332,35 @@
     .evo-imp-log-text{font-size:.68rem;color:var(--text);line-height:1.65}
     .evo-imp-empty{text-align:center;padding:32px;color:var(--dim);font-size:.68rem}
 
+    /* ── Token Budget Card ── */
+    .tb-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+    .tb-model-name{font-size:.82rem;font-weight:800;color:var(--text);font-family:var(--mono);word-break:break-all}
+    .tb-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;align-items:center}
+    .tb-chip{padding:2px 9px;border-radius:5px;font-size:.55rem;font-weight:700;
+      letter-spacing:.06em;border:1px solid;font-family:var(--mono)}
+    .tb-chip-groq{color:var(--cyan);border-color:rgba(0,243,255,.35);background:rgba(0,243,255,.08)}
+    .tb-chip-stat{color:var(--dim);border-color:var(--border);background:rgba(255,255,255,.03)}
+    .tb-budget-wrap{margin:14px 0 10px}
+    .tb-budget-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+    .tb-budget-label{font-size:.54rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
+    .tb-budget-pct{font-size:.65rem;font-weight:800}
+    .tb-bar-track{height:8px;background:rgba(255,255,255,.05);border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,.04)}
+    .tb-bar-fill{height:100%;border-radius:6px;transition:width 1.2s cubic-bezier(.4,0,.2,1)}
+    .tb-bar-meta{display:flex;justify-content:space-between;margin-top:5px}
+    .tb-bar-used{font-size:.56rem;color:var(--dim)}
+    .tb-bar-left{font-size:.56rem;color:var(--lime)}
+    .tb-divider{height:1px;background:var(--border);margin:12px 0}
+    .tb-agents-label{font-size:.54rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+    .tb-agent-row{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+    .tb-agent-row:last-child{border-bottom:none}
+    .tb-agent-name{font-size:.65rem;font-family:var(--mono);color:var(--cyan);min-width:90px;flex-shrink:0}
+    .tb-agent-tokens{font-size:.65rem;font-family:var(--mono);min-width:65px;flex-shrink:0;text-align:right}
+    .tb-agent-bar-wrap{flex:1;height:3px;background:rgba(255,255,255,.06);border-radius:2px;min-width:40px}
+    .tb-agent-bar{height:100%;border-radius:2px;background:var(--cyan);transition:width .8s ease}
+    .tb-agent-calls{font-size:.54rem;color:var(--dim);min-width:36px;text-align:right;flex-shrink:0}
+    .tb-empty{color:var(--dim);font-size:.65rem;text-align:center;padding:16px 0}
+    .tb-timestamp{font-size:.5rem;color:rgba(255,255,255,.12);margin-top:10px;text-align:right}
+
     /* ── Drawer ── */
     .overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);
       z-index:999;opacity:0;pointer-events:none;transition:.3s}
@@ -434,6 +463,12 @@
 
     <!-- GEN DETAIL -->
     <div id="gen-detail"></div>
+
+    <!-- TOKEN BUDGET CARD -->
+    <div class="card" id="token-budget-card" style="display:none">
+      <div class="card-title">🤖 LLM Model &amp; Daily Token Budget</div>
+      <div id="token-budget-content"></div>
+    </div>
 
     <!-- EVOLUTION IMPROVEMENTS -->
     <div class="card" id="evo-improvements-card" style="display:none">
@@ -554,8 +589,9 @@
 
 <script>
 var STATE={heartbeat:null,evolutionLog:[],benchmarkMatrix:null,activeGen:null,
-  genProgress:{},   // gen_num → {task_list, results, descriptions}
-  collapsed:new Set(),  // gens collapsed by user or auto
+  genProgress:{},    // gen_num → {task_list, results, descriptions}
+  tokenUsage:null,   // data/token_usage.json content
+  collapsed:new Set(),   // gens collapsed by user or auto
   userExpanded:new Set(), // gens user explicitly opened
   activeTab:'summary',   // 'summary' | 'code'
   lastCode:null          // {gen, task_id, final_code, stdout, stderr, error_type, phase_results}
@@ -573,11 +609,13 @@ async function refresh(){
   var results=await Promise.all([
     loadJSON('data/heartbeat.json'),
     loadJSON('data/evolution_log.json'),
-    loadJSON('data/benchmark_matrix.json')
+    loadJSON('data/benchmark_matrix.json'),
+    loadJSON('data/token_usage.json')
   ]);
   if(results[0])STATE.heartbeat=results[0];
   if(results[1])STATE.evolutionLog=Array.isArray(results[1])?results[1]:[];
   if(results[2])STATE.benchmarkMatrix=results[2];
+  if(results[3])STATE.tokenUsage=results[3];
 
   // Load progress for all known gens
   var knownGens=getKnownGens();
@@ -604,6 +642,7 @@ function renderAll(){
   renderSidebarNav();
   renderTimeline();
   if(STATE.activeGen!==null)renderGenDetail(STATE.activeGen);
+  renderTokenBudget();
   renderImprovements();
   renderTaskTabs();
   renderTopology();
@@ -1075,6 +1114,93 @@ function renderPhaseBadges(pr){
     return v?'<span class="prb prb-pass">✓ '+d.l+'</span>'
             :'<span class="prb prb-fail">✗ '+d.l+'</span>';
   }).join('');
+}
+
+/* ══ TOKEN BUDGET CARD ══ */
+function fmtNum(n){
+  if(n===null||n===undefined)return '0';
+  return Math.round(n).toLocaleString();
+}
+function fmtTime(iso){
+  if(!iso)return '';
+  try{return new Date(iso).toLocaleTimeString();}catch(e){return iso.slice(11,19)||'';}
+}
+
+function renderTokenBudget(){
+  var tu=STATE.tokenUsage;
+  var card=document.getElementById('token-budget-card');
+  if(!tu||!tu.model){card.style.display='none';return;}
+  card.style.display='block';
+
+  var pctUsed=tu.pct_used||0;
+  var pctStr=(pctUsed*100).toFixed(1);
+  // Bar color: green → amber → red as budget shrinks
+  var barColor=pctUsed<0.6?'var(--lime)':pctUsed<0.85?'var(--amber)':'var(--red)';
+  var pctColor=pctUsed<0.6?'var(--lime)':pctUsed<0.85?'var(--amber)':'var(--red)';
+
+  // Full model path and short name for display
+  var modelFull=tu.model||'unknown';
+  var modelShort=modelFull.includes('/')?modelFull.split('/').pop():modelFull;
+
+  // Per-agent rows, sorted by tokens desc
+  var agents=Object.entries(tu.per_agent||{})
+    .sort(function(a,b){return b[1].tokens-a[1].tokens;});
+  var maxTok=agents.length?Math.max.apply(null,agents.map(function(e){return e[1].tokens;})):1;
+
+  var agentHtml='';
+  if(agents.length){
+    agentHtml='<div class="tb-divider"></div>'+
+      '<div class="tb-agents-label">Per-Agent Usage (all agents → same model)</div>';
+    agents.forEach(function(entry){
+      var name=entry[0], info=entry[1];
+      var barW=maxTok?Math.round(info.tokens/maxTok*100):0;
+      agentHtml+=
+        '<div class="tb-agent-row">'+
+          '<div class="tb-agent-name">'+name+'</div>'+
+          '<div class="tb-agent-tokens">'+fmtNum(info.tokens)+'</div>'+
+          '<div class="tb-agent-bar-wrap">'+
+            '<div class="tb-agent-bar" style="width:'+barW+'%"></div>'+
+          '</div>'+
+          '<div class="tb-agent-calls">'+info.calls+' call'+(info.calls!==1?'s':'')+'</div>'+
+        '</div>';
+    });
+  } else {
+    agentHtml='<div class="tb-divider"></div>'+
+      '<div class="tb-empty">No API calls yet — tracking will appear here once evolution starts.</div>';
+  }
+
+  var html=
+    '<div class="tb-header">'+
+      '<div>'+
+        '<div class="tb-model-name" title="'+modelFull+'">'+modelShort+'</div>'+
+        '<div class="tb-chips">'+
+          '<span class="tb-chip tb-chip-groq">GROQ</span>'+
+          '<span class="tb-chip tb-chip-stat">'+fmtNum(tu.tpm_limit)+' TPM</span>'+
+          '<span class="tb-chip tb-chip-stat">'+fmtNum(tu.daily_limit_tokens)+' TPD</span>'+
+          '<span class="tb-chip tb-chip-stat" style="color:var(--dim);font-size:.5rem" title="Full model ID: '+modelFull+'">'+modelFull+'</span>'+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+
+    '<div class="tb-budget-wrap">'+
+      '<div class="tb-budget-header">'+
+        '<span class="tb-budget-label">Daily Token Budget</span>'+
+        '<span class="tb-budget-pct" style="color:'+pctColor+'">'+pctStr+'% used</span>'+
+      '</div>'+
+      '<div class="tb-bar-track">'+
+        '<div class="tb-bar-fill" style="width:'+pctStr+'%;background:'+barColor+'"></div>'+
+      '</div>'+
+      '<div class="tb-bar-meta">'+
+        '<span class="tb-bar-used">'+fmtNum(tu.total_tokens_used)+' used</span>'+
+        '<span class="tb-bar-left">'+fmtNum(tu.tokens_remaining)+' remaining</span>'+
+      '</div>'+
+    '</div>'+
+
+    agentHtml+
+
+    '<div class="tb-timestamp">Last updated: '+fmtTime(tu.last_updated)+'</div>';
+
+  document.getElementById('token-budget-content').innerHTML=html;
 }
 
 /* ══ SIDEBAR NAV ══ */

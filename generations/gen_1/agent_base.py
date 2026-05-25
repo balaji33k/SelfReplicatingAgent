@@ -44,7 +44,8 @@ class SpecialistAgent:
 
     def _call_llm(self, prompt: str) -> str:
         self.logger.debug(f"Calling LLM — prompt length: {len(prompt)} chars")
-        response = self.llm.call(prompt)
+        # Pass agent_id so llm_client can track tokens per agent for the dashboard
+        response = self.llm.call(prompt, agent_name=self.agent_id)
         self.logger.debug(f"LLM response — length: {len(response)} chars")
         return response
 
