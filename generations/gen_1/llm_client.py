@@ -37,34 +37,39 @@ logger = logging.getLogger(__name__)
 
 # ── Known Groq free-tier token limits ────────────────────────────────────────
 # tpd = tokens per day, tpm = tokens per minute
+# These are approximate free-tier limits; actual limits may vary by account.
 _MODEL_LIMITS: Dict[str, Dict[str, int]] = {
-    "meta-llama/llama-4-scout-17b-16e-instruct": {"tpd": 500_000, "tpm": 30_000},
-    "meta-llama/llama-4-maverick-17b-128e-instruct": {"tpd": 500_000, "tpm": 30_000},
-    "llama-3.3-70b-versatile":                   {"tpd": 100_000, "tpm": 12_000},
-    "llama-3.1-70b-versatile":                   {"tpd": 100_000, "tpm": 12_000},
-    "llama-3.1-8b-instant":                       {"tpd": 500_000, "tpm": 20_000},
-    "mixtral-8x7b-32768":                         {"tpd": 500_000, "tpm": 18_000},
-    "gemma2-9b-it":                               {"tpd": 500_000, "tpm": 15_000},
+    "meta-llama/llama-4-scout-17b-16e-instruct":  {"tpd": 500_000, "tpm": 30_000},
+    "llama-3.1-8b-instant":                        {"tpd": 500_000, "tpm": 20_000},
+    "llama-3.3-70b-versatile":                     {"tpd": 100_000, "tpm": 12_000},
+    "deepseek-r1-distill-llama-70b":               {"tpd": 500_000, "tpm": 30_000},
+    "deepseek-r1-distill-qwen-32b":                {"tpd": 500_000, "tpm": 30_000},
+    "qwen-qwq-32b":                                {"tpd": 500_000, "tpm": 30_000},
 }
 _DEFAULT_LIMITS = {"tpd": 500_000, "tpm": 30_000}
 
 # Ordered fallback chain — when primary hits TPD/unavailable, switch to next.
 # Each model has its own independent daily token budget at Groq.
-# EXCLUDED models (confirmed unavailable as of 2026):
-#   - llama-4-maverick: 404 (not on free tier)
-#   - gemma2-9b-it: 400 model_decommissioned
-#   - mixtral-8x7b-32768: 400 model_decommissioned
+# CONFIRMED DECOMMISSIONED (do not add back):
+#   - llama4-maverick: 404 (not on free tier)
+#   - gemma2-9b-it, mixtral-8x7b-32768, llama3-70b-8192, llama3-8b-8192: decommissioned
 _FALLBACK_ORDER = [
-    "meta-llama/llama-4-scout-17b-16e-instruct",   # primary  (30k TPM / 500k TPD)
-    "llama-3.1-8b-instant",                          # fallback 1 (20k TPM / 500k TPD)
-    "llama-3.3-70b-versatile",                        # fallback 2 (12k TPM / 100k TPD)
-    "llama3-70b-8192",                                # fallback 3 (older llama3)
-    "llama3-8b-8192",                                 # fallback 4 (older llama3 small)
+    "meta-llama/llama-4-scout-17b-16e-instruct",  # primary   (30k TPM / 500k TPD)
+    "llama-3.1-8b-instant",                         # fallback1 (20k TPM / 500k TPD)
+    "llama-3.3-70b-versatile",                       # fallback2 (12k TPM / 100k TPD)
+    "deepseek-r1-distill-llama-70b",                 # fallback3 (newer Groq model)
+    "deepseek-r1-distill-qwen-32b",                  # fallback4 (newer Groq model)
+    "qwen-qwq-32b",                                  # fallback5 (newer Groq model)
 ]
 
-# Max wait time (seconds) for a TPM rate-limit sleep.
-# If the error says "retry in > N seconds", treat it as TPD exhaustion and switch models.
+# Max wait (seconds) for a per-minute rate limit before sleeping and retrying.
+# Anything longer than this is treated as a per-day limit → switch model.
 _MAX_TPM_SLEEP_SEC = 900   # 15 minutes
+
+# When ALL fallback models are exhausted, wait this long before trying again
+# from the beginning of the chain (rolling 24h window will have freed some tokens).
+_RECOVERY_WAIT_SEC = 1800   # 30 minutes
+_MAX_RECOVERY_ATTEMPTS = 4   # give up after 4 full-chain retries (= 2 hours total)
 
 
 class LLMClient:
@@ -169,84 +174,151 @@ class LLMClient:
              switch to next fallback, retry immediately.
           3. If no fallbacks remain → re-raise so callers can handle it.
         """
-        max_attempts = len(_FALLBACK_ORDER) + 4   # enough for all fallbacks + several TPM retries
-        for attempt in range(max_attempts):
-            try:
-                response = self._llm.invoke(lc_messages)
-                self._record_usage(agent_name, response)
-                return response.content
-            except Exception as exc:
-                err_str = str(exc)
-                is_rate_limit = ("429" in err_str or "rate_limit_exceeded" in err_str
-                                 or "RateLimitError" in type(exc).__name__)
-                is_not_found = (
-                    "404" in err_str
-                    or "model_not_found" in err_str
-                    or "does not exist" in err_str
-                    or "model_decommissioned" in err_str
-                    or "decommissioned" in err_str.lower()
-                    or "no longer supported" in err_str.lower()
-                )
+        # Outer loop: allow full-chain retries after a recovery wait
+        for recovery_attempt in range(_MAX_RECOVERY_ATTEMPTS):
+            # Inner loop: try each model in the fallback chain
+            for attempt in range(len(_FALLBACK_ORDER) + 4):
+                try:
+                    response = self._llm.invoke(lc_messages)
+                    self._record_usage(agent_name, response)
+                    return response.content
+                except Exception as exc:
+                    err_str = str(exc)
+                    is_rate_limit = (
+                        "429" in err_str
+                        or "rate_limit_exceeded" in err_str
+                        or "RateLimitError" in type(exc).__name__
+                    )
+                    is_unavailable = (
+                        "404" in err_str
+                        or "model_not_found" in err_str
+                        or "does not exist" in err_str
+                        or "model_decommissioned" in err_str
+                        or "decommissioned" in err_str.lower()
+                        or "no longer supported" in err_str.lower()
+                    )
 
-                if is_rate_limit:
-                    retry_sec = self._parse_retry_seconds(err_str)
-                    current_model = self.config.model_name
-
-                    if retry_sec <= _MAX_TPM_SLEEP_SEC:
-                        # TPM (per-minute) limit — short wait, retry same model
-                        sleep_time = retry_sec + 5
-                        logger.warning(
-                            f"[llm_client] TPM rate limit on {current_model} — "
-                            f"sleeping {sleep_time:.0f}s (attempt {attempt+1})"
+                    if is_rate_limit:
+                        retry_sec = self._parse_retry_seconds(err_str)
+                        current_model = self.config.model_name
+                        logger.debug(
+                            f"[llm_client] 429 on {current_model} — "
+                            f"retry_sec={retry_sec:.0f} | raw_msg={err_str[:200]}"
                         )
-                        time.sleep(sleep_time)
-                    else:
-                        # TPD (per-day) exhausted on this model — switch to fallback
-                        self._exhausted_models.add(current_model)
+
+                        if retry_sec <= _MAX_TPM_SLEEP_SEC:
+                            # TPM (per-minute) limit — sleep and retry same model
+                            sleep_time = retry_sec + 5
+                            logger.warning(
+                                f"[llm_client] TPM rate limit on {current_model} — "
+                                f"sleeping {sleep_time:.0f}s (attempt {attempt+1})"
+                            )
+                            time.sleep(sleep_time)
+                        else:
+                            # TPD (per-day) exhausted — switch to next fallback
+                            self._exhausted_models.add(current_model)
+                            logger.warning(
+                                f"[llm_client] TPD exhausted on {current_model} "
+                                f"(retry in {retry_sec:.0f}s) — switching fallback"
+                            )
+                            if not self._switch_to_next_model():
+                                break  # all models exhausted → go to recovery wait
+
+                    elif is_unavailable:
+                        bad_model = self.config.model_name
+                        self._exhausted_models.add(bad_model)
                         logger.warning(
-                            f"[llm_client] TPD exhausted on {current_model} "
-                            f"(retry in {retry_sec:.0f}s) — switching to fallback model"
+                            f"[llm_client] Model {bad_model} unavailable/decommissioned — "
+                            f"switching to next fallback"
                         )
                         if not self._switch_to_next_model():
-                            raise RuntimeError(
-                                f"All Groq models exhausted for today. "
-                                f"Exhausted: {self._exhausted_models}. "
-                                f"Last error: {exc}"
-                            ) from exc
+                            break  # all models exhausted → go to recovery wait
+                    else:
+                        raise  # real error — propagate immediately
+            else:
+                # Inner loop finished normally (shouldn't happen) — break outer
+                break
 
-                elif is_not_found:
-                    # Model doesn't exist on this account (404) — skip to next fallback
-                    bad_model = self.config.model_name
-                    self._exhausted_models.add(bad_model)
-                    logger.warning(
-                        f"[llm_client] Model {bad_model} not found (404) — "
-                        f"skipping to next fallback"
-                    )
-                    if not self._switch_to_next_model():
-                        raise RuntimeError(
-                            f"No available Groq models. "
-                            f"Tried: {self._exhausted_models}. "
-                            f"Last error: {exc}"
-                        ) from exc
+            # ── All fallback models exhausted ────────────────────────────────
+            # Wait for the Groq rolling 24h window to free up some tokens,
+            # then reset and try from the primary model again.
+            logger.warning(
+                f"[llm_client] All Groq models exhausted "
+                f"(tried: {self._exhausted_models}). "
+                f"Waiting {_RECOVERY_WAIT_SEC}s for token budget to partially recover "
+                f"(recovery attempt {recovery_attempt+1}/{_MAX_RECOVERY_ATTEMPTS})..."
+            )
+            time.sleep(_RECOVERY_WAIT_SEC)
+            # Reset exhausted set — tokens from 30min ago have rolled off the 24h window
+            self._exhausted_models.clear()
+            if not self._switch_to_next_model():
+                # Switch to primary explicitly
+                self._switch_to_model(_FALLBACK_ORDER[0])
 
-                else:
-                    raise
-        raise RuntimeError(f"[llm_client] Exceeded {max_attempts} retry attempts")
+        raise RuntimeError(
+            f"[llm_client] All Groq models exhausted after {_MAX_RECOVERY_ATTEMPTS} "
+            f"recovery attempts ({_MAX_RECOVERY_ATTEMPTS * _RECOVERY_WAIT_SEC / 3600:.1f}h total). "
+            f"Last tried: {self._exhausted_models}"
+        )
 
     def _parse_retry_seconds(self, error_msg: str) -> float:
         """
-        Parse 'Please try again in Xm Y.Zs' → total seconds.
-        Returns a large number (9999) if the pattern is not found.
+        Parse Groq retry-after strings → total seconds.
+        Handles all known formats:
+          "13m3.8208s"    → 783s
+          "8h32m11.2s"   → 30731s
+          "8h32m"        → 30720s
+          "8h"           → 28800s
+          "45.5s"        → 45.5s
+        Returns _MAX_TPM_SLEEP_SEC + 1 (forces model switch) if unparseable.
         """
-        # "13m3.8208s" pattern
+        # "Xh Ym Zs" — hours + minutes + seconds
+        m = re.search(r"try again in (\d+)h(\d+)m(\d+(?:\.\d+)?)s", error_msg)
+        if m:
+            return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+        # "Xh Ym" — hours + minutes only
+        m = re.search(r"try again in (\d+)h(\d+)m\b", error_msg)
+        if m:
+            return int(m.group(1)) * 3600 + int(m.group(2)) * 60
+        # "Xh" — hours only
+        m = re.search(r"try again in (\d+)h\b", error_msg)
+        if m:
+            return int(m.group(1)) * 3600
+        # "Xm Y.Zs" — minutes + seconds
         m = re.search(r"try again in (\d+)m(\d+(?:\.\d+)?)s", error_msg)
         if m:
             return int(m.group(1)) * 60 + float(m.group(2))
-        # "45.5s" pattern (seconds only)
+        # "X.Ys" — seconds only
         m = re.search(r"try again in (\d+(?:\.\d+)?)s", error_msg)
         if m:
             return float(m.group(1))
-        return 9999.0
+        # Unknown format — log the raw message and treat as long wait (switch model)
+        logger.debug(f"[llm_client] Could not parse retry time from: {error_msg[:300]}")
+        return _MAX_TPM_SLEEP_SEC + 1
+
+    def _switch_to_model(self, model_name: str) -> bool:
+        """Switch to a specific model by name. Returns True on success."""
+        try:
+            old_model = self.config.model_name
+            self._llm = ChatGroq(
+                model=model_name,
+                temperature=self.config.temperature,
+                api_key=self._api_key,
+                max_tokens=8192,
+                timeout=self.config.timeout_seconds,
+                max_retries=2,
+            )
+            self.config.model_name = model_name
+            self._limits = _MODEL_LIMITS.get(model_name, _DEFAULT_LIMITS)
+            logger.info(
+                f"[llm_client] ✓ Switched model: {old_model} → {model_name} "
+                f"(budget: {self._limits['tpd']:,} TPD / {self._limits['tpm']:,} TPM)"
+            )
+            return True
+        except Exception as e:
+            logger.error(f"[llm_client] Failed to switch to {model_name}: {e}")
+            self._exhausted_models.add(model_name)
+            return False
 
     def _switch_to_next_model(self) -> bool:
         """
@@ -255,26 +327,8 @@ class LLMClient:
         """
         for model_name in _FALLBACK_ORDER:
             if model_name not in self._exhausted_models:
-                try:
-                    self._llm = ChatGroq(
-                        model=model_name,
-                        temperature=self.config.temperature,
-                        api_key=self._api_key,
-                        max_tokens=8192,
-                        timeout=self.config.timeout_seconds,
-                        max_retries=2,
-                    )
-                    old_model = self.config.model_name
-                    self.config.model_name = model_name
-                    self._limits = _MODEL_LIMITS.get(model_name, _DEFAULT_LIMITS)
-                    logger.info(
-                        f"[llm_client] ✓ Switched model: {old_model} → {model_name} "
-                        f"(new budget: {self._limits['tpd']:,} TPD / {self._limits['tpm']:,} TPM)"
-                    )
+                if self._switch_to_model(model_name):
                     return True
-                except Exception as e:
-                    logger.error(f"[llm_client] Failed to switch to {model_name}: {e}")
-                    self._exhausted_models.add(model_name)
         return False
 
     # ── Token tracking ────────────────────────────────────────────────────────
