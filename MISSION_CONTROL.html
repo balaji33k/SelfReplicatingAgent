@@ -1278,14 +1278,13 @@ function openDrawer(row,gen){
     ' · <a href="/code" target="_blank" style="color:var(--cyan);font-size:.6rem;text-decoration:none">Browse all gen files ↗</a></div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px">'+
       '<div><div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Agents Used</div>'+
-        '<div style="font-size:.68rem">'+((row.agents_used||[]).join(' → ')||'—')+'</div></div>'+
-      '<div><div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Error</div>'+
+        '<div style="font-size:.68rem" data-field="agents_used">'+((row.agents_used||[]).join(' → ')||'Loading…')+'</div></div>'+
+      '<div><div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Error Type</div>'+
         '<div style="font-size:.68rem;color:'+(pass?'var(--lime)':'var(--red)')+'">'+( row.error_type||'None')+'</div></div>'+
       '<div><div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Cycles</div>'+
-        '<div style="font-size:.68rem">'+Object.entries(row.cycles||{}).map(function(kv){return kv[0]+': '+kv[1];}).join(', ')+'</div></div>'+
+        '<div style="font-size:.68rem" data-field="cycles">'+Object.entries(row.cycles||{}).map(function(kv){return kv[0]+': '+kv[1];}).join(', ')+'</div></div>'+
     '</div>'+
-    '<div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Generated Code</div>'+
-    '<div id="code-loading" style="color:var(--dim);font-size:.65rem;font-family:var(--mono);padding:16px">⟳ Loading code…</div>';
+    '<div id="code-loading" style="color:var(--dim);font-size:.65rem;padding:12px 0">⟳ Loading details…</div>';
 
   document.getElementById('drawer').classList.add('open');
   document.getElementById('overlay').classList.add('show');
@@ -1297,43 +1296,82 @@ function openDrawer(row,gen){
     .then(function(data){
       var codeEl=document.getElementById('code-loading');
       if(!codeEl)return;
-      if(!data||!data.final_code){
-        codeEl.textContent='No code found for this task.';
+      if(!data){
+        codeEl.textContent='Could not load result file.';
         return;
       }
-      var escaped=data.final_code
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      // Test results table (expected vs actual)
-      var testHtml='';
+
+      // Update agents used + cycles from full result (not passed in row)
+      if(data.agents_used&&data.agents_used.length){
+        var auEl=dc.querySelector('[data-field="agents_used"]');
+        if(auEl)auEl.textContent=data.agents_used.join(' → ');
+      }
+      if(data.cycles&&Object.keys(data.cycles).length){
+        var cyEl=dc.querySelector('[data-field="cycles"]');
+        if(cyEl)cyEl.textContent=Object.entries(data.cycles).map(function(kv){return kv[0]+': '+kv[1];}).join(', ');
+      }
+
+      var html='';
+
+      // ── Stderr / error — always show first for failures ──
+      var stderr=(data.stderr||'').trim();
+      var stdout=(data.stdout||'').trim();
+      if(!pass&&stderr){
+        var errEsc=stderr.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        html+='<div style="margin-bottom:16px">'+
+          '<div style="font-size:.55rem;color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">❌ Error Output</div>'+
+          '<div style="background:#1a0000;border:1px solid rgba(255,49,49,.3);border-radius:8px;padding:12px;max-height:280px;overflow-y:auto">'+
+            '<pre style="margin:0;color:#fc8181;font-size:.63rem;line-height:1.6;white-space:pre-wrap;word-break:break-all">'+errEsc+'</pre>'+
+          '</div></div>';
+      }
+
+      // ── Stdout (if any) ──
+      if(stdout){
+        var outEsc=stdout.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        html+='<div style="margin-bottom:16px">'+
+          '<div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Stdout</div>'+
+          '<div style="background:#0a0a0f;border:1px solid var(--border);border-radius:8px;padding:10px;max-height:160px;overflow-y:auto">'+
+            '<pre style="margin:0;color:var(--dim);font-size:.6rem;white-space:pre-wrap">'+outEsc+'</pre>'+
+          '</div></div>';
+      }
+
+      // ── Generated code ──
+      if(data.final_code){
+        var escaped=data.final_code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        html+='<div style="margin-bottom:16px">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
+            '<span style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px">Generated Code</span>'+
+            '<button onclick="copyCode(this)" data-code="'+data.final_code.replace(/"/g,'&quot;')+'" '+
+              'style="background:rgba(0,243,255,.1);border:1px solid rgba(0,243,255,.3);color:var(--cyan);'+
+              'border-radius:6px;padding:3px 10px;font-size:.55rem;cursor:pointer;font-family:var(--font)">Copy</button>'+
+          '</div>'+
+          '<div style="background:#0a0a0f;border:1px solid var(--border);border-radius:8px;padding:12px;max-height:400px;overflow-y:auto">'+
+            '<pre style="margin:0;font-size:.63rem;line-height:1.6;white-space:pre"><code>'+escaped+'</code></pre>'+
+          '</div></div>';
+      } else {
+        html+='<div style="color:var(--dim);font-size:.65rem;margin-bottom:12px">No generated code recorded for this task.</div>';
+      }
+
+      // ── Test results table ──
       if(data.test_results&&data.test_results.length){
         var trows=data.test_results.map(function(tr){
           var ok=tr.passed;
           return '<tr>'+
-            '<td style="color:var(--dim);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
-              JSON.stringify(tr.input).slice(0,60)+'</td>'+
+            '<td style="color:var(--dim);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+JSON.stringify(tr.input).slice(0,60)+'</td>'+
             '<td style="color:var(--dim)">'+JSON.stringify(tr.expected).slice(0,60)+'</td>'+
             '<td style="color:'+(ok?'var(--lime)':'var(--red)')+'">'+
-              (tr.error?'⚠ '+tr.error.slice(0,40):JSON.stringify(tr.actual).slice(0,60))+'</td>'+
+              (tr.error?'⚠ '+tr.error.slice(0,40):JSON.stringify(tr.actual||'').slice(0,60))+'</td>'+
             '<td><span class="pill '+(ok?'pass-pill':'fail-pill')+'">'+(ok?'PASS':'FAIL')+'</span></td>'+
           '</tr>';
         }).join('');
-        testHtml='<div style="margin-top:16px">'+
+        html+='<div style="margin-bottom:16px">'+
           '<div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Test Results</div>'+
-          '<table style="font-size:.6rem"><thead><tr>'+
+          '<table style="font-size:.6rem;width:100%"><thead><tr>'+
             '<th>Input</th><th>Expected</th><th>Actual</th><th>Status</th>'+
           '</tr></thead><tbody>'+trows+'</tbody></table></div>';
       }
 
-      codeEl.innerHTML=
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
-          '<span style="font-size:.55rem;color:var(--dim)">python</span>'+
-          '<button onclick="copyCode(this)" data-code="'+data.final_code.replace(/"/g,'&quot;')+'" '+
-            'style="background:rgba(0,243,255,.1);border:1px solid rgba(0,243,255,.3);color:var(--cyan);'+
-            'border-radius:6px;padding:3px 10px;font-size:.55rem;cursor:pointer;font-family:var(--font)">Copy</button>'+
-        '</div>'+
-        '<pre style="margin:0;max-height:400px;overflow-y:auto"><code>'+escaped+'</code></pre>'+
-        testHtml+
-        (data.stderr&&!pass?'<div style="margin-top:14px"><div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Stderr</div><pre style="margin:0;color:var(--red)">'+data.stderr.replace(/</g,'&lt;').slice(0,800)+'</pre></div>':'');
+      codeEl.innerHTML=html;
     })
     .catch(function(){
       var el=document.getElementById('code-loading');
