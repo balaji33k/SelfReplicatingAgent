@@ -377,9 +377,6 @@
         <div id="activity-badges" style="display:flex;gap:6px;flex-wrap:wrap"></div>
       </div>
 
-      <!-- Benchmark task list — live, always visible in hero card -->
-      <div id="hero-task-list" style="display:none;margin-top:14px"></div>
-
       <!-- Mini stats -->
       <div class="mini-stats">
         <div class="mini-stat">
@@ -574,52 +571,6 @@ function renderHero(){
     actWrap.style.display='none';
   }
 
-  // Hero task list — benchmark tasks for the active gen, inline in hero card
-  var heroListEl=document.getElementById('hero-task-list');
-  var activeGen=hb.active_gen;
-  var progress=STATE.genProgress[activeGen]||null;
-  var taskList=progress&&progress.task_list?progress.task_list:[];
-  var resultsMap={};
-  if(progress&&progress.results) Object.keys(progress.results).forEach(function(tid){resultsMap[tid]=progress.results[tid];});
-  if(taskList.length){
-    heroListEl.style.display='block';
-    var activeTid=hb.active_task_id||'';
-    var rows=taskList.map(function(tid){
-      var r=resultsMap[tid];
-      var isActive=tid===activeTid;
-      var icon,cls,bg='';
-      if(isActive){
-        icon='<div class="spinner spinner-cyan" style="width:10px;height:10px;display:inline-block"></div>';
-        cls='t-run';bg='background:rgba(0,212,255,.06);';
-      } else if(r){
-        var pass=(r.status==='pass'||r.success===true);
-        if(pass){icon='<span style="color:var(--lime)">✓</span>';cls='t-pass';}
-        else{icon='<span style="color:var(--red)">✗</span>';cls='t-fail';}
-      } else {
-        icon='<span style="opacity:.3">·</span>';cls='t-pend';
-      }
-      var errHtml=(r&&cls==='t-fail'&&r.error_type)?
-        '<span style="font-size:.58rem;color:var(--dim);margin-left:6px">'+r.error_type+'</span>':'';
-      var rtHtml=(r&&r.runtime)?
-        '<span style="font-size:.58rem;color:var(--dim);margin-left:auto;padding-right:4px">'+r.runtime+'s</span>':'';
-      var clickHtml='';
-      if(r&&cls==='t-fail'){
-        var safeRow=JSON.stringify({task_id:tid,status:'fail',error_type:r.error_type||'',agents_used:r.agents_used||[],cycles:r.cycles||{}}).replace(/"/g,'&quot;');
-        clickHtml=' onclick="openDrawer('+safeRow+','+activeGen+')" style="cursor:pointer;'+bg+'"';
-      } else {
-        clickHtml=' style="'+bg+'"';
-      }
-      return '<div class="task-row '+cls+'"'+clickHtml+'>'+
-        '<span style="width:16px;text-align:center;flex-shrink:0">'+icon+'</span>'+
-        '<span style="font-size:.65rem;font-family:monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+tid+'</span>'+
-        errHtml+rtHtml+
-      '</div>';
-    }).join('');
-    heroListEl.innerHTML='<div style="font-size:.6rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Benchmark Tasks</div>'+
-      '<div class="task-list" style="max-height:260px;overflow-y:auto">'+rows+'</div>';
-  } else {
-    heroListEl.style.display='none';
-  }
 }
 
 /* ══ TASK LIST ══ */
@@ -635,8 +586,8 @@ function toggleCollapse(gen,e){
   renderGenDetail(gen);
 }
 
-function renderTaskList(gen,progress,evoEntry,activeTid){
-  // Build task list: prefer live progress file, fallback to evolution log entry
+/* Build the task rows HTML only — no card wrapper, embeds inside the gen card */
+function renderTaskRows(gen,progress,evoEntry,activeTid){
   var taskList=[],resultsMap={};
   if(progress&&progress.task_list&&progress.task_list.length){
     taskList=progress.task_list;
@@ -664,10 +615,8 @@ function renderTaskList(gen,progress,evoEntry,activeTid){
     } else {
       icon='<span style="opacity:.3">·</span>';cls='t-pend';pending++;
     }
-    var errHtml=r&&!isActive&&(r.error_type||r.error_type==='')?
-      (r.error_type?'<div class="task-err">'+r.error_type+'</div>':''):'';
+    var errHtml=r&&!isActive&&r.error_type?'<div class="task-err">'+r.error_type+'</div>':'';
     var rtHtml=r&&r.runtime?'<div class="task-rt">'+r.runtime+'s</div>':'';
-    // Build safe onclick data for failed tasks
     var clickHtml='';
     if(r&&cls==='t-fail'){
       var safeRow=JSON.stringify({
@@ -676,7 +625,7 @@ function renderTaskList(gen,progress,evoEntry,activeTid){
         agents_used:r.agents_used||[],
         cycles:r.cycles||{}
       }).replace(/"/g,'&quot;');
-      clickHtml=' onclick="openDrawer('+safeRow+','+gen+')"';
+      clickHtml=' onclick="openDrawer('+safeRow+','+gen+')" style="cursor:pointer"';
     }
     return '<div class="task-row '+cls+'"'+clickHtml+'>'+
       '<div class="task-icon">'+icon+'</div>'+
@@ -690,18 +639,22 @@ function renderTaskList(gen,progress,evoEntry,activeTid){
     '<span style="color:var(--red)">'+failCount+' ✗</span>'+
     (pending?' <span style="color:var(--dim)">'+pending+' pending</span>':'');
 
-  return '<div class="card">'+
-    '<div class="collapse-hdr" onclick="toggleCollapse('+gen+',event)">'+
-      '<div class="card-title" style="margin-bottom:0">'+
-        'Benchmark Tasks — Gen '+gen+
-        ' &nbsp;<span style="font-weight:400;font-size:.6rem">'+summary+'</span>'+
+  return '<div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">'+
+    '<div class="collapse-hdr" onclick="toggleCollapse('+gen+',event)" style="margin-bottom:0">'+
+      '<div style="font-size:.62rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em">'+
+        'Benchmark Tasks &nbsp;<span style="font-weight:400">'+summary+'</span>'+
       '</div>'+
       '<button class="collapse-btn">'+
-        (isCollapsed?'▶ Show '+taskList.length+' tasks':'▼ Collapse')+
+        (isCollapsed?'▶ Show '+taskList.length:'▼ Collapse')+
       '</button>'+
     '</div>'+
-    (isCollapsed?'':'<div class="task-list" style="margin-top:10px">'+rows+'</div>')+
+    (isCollapsed?'':'<div class="task-list" style="margin-top:8px;max-height:320px;overflow-y:auto">'+rows+'</div>')+
   '</div>';
+}
+
+/* Kept for any callers that pass evoEntry — delegates to renderTaskRows */
+function renderTaskList(gen,progress,evoEntry,activeTid){
+  return renderTaskRows(gen,progress,evoEntry,activeTid);
 }
 
 /* ══ PHASE HELPERS ══ */
@@ -804,12 +757,14 @@ function renderGenDetail(gen){
       '<div class="stat"><div class="stat-val" style="color:var(--lime)">'+passed+'</div><div class="stat-label">Passed</div></div>'+
       '<div class="stat"><div class="stat-val" style="color:var(--red)">'+failed+'</div><div class="stat-label">Failed</div></div>'+
       '<div class="stat"><div class="stat-val" style="font-size:.9rem;padding-top:8px">'+dHtml+'</div><div class="stat-label">vs Parent</div></div>'+
-      '</div></div>';
+      '</div>'+
+      renderTaskRows(gen,progress,e,activeTid)+
+      '</div>';
   } else if(live){
     var parts2=(hb.progress||'0/0').split('/').map(Number);
     var d2=parts2[0]||0,t2=parts2[1]||0;
     var barW2=t2?pct2str(d2/t2):'0%';
-    html+='<div class="card"><div class="card-title">Generation '+gen+' — Live Progress</div>'+
+    html+='<div class="card"><div class="card-title">Generation '+gen+' — Live</div>'+
       '<div class="stat-grid" style="margin-bottom:16px">'+
       '<div class="stat"><div class="stat-val">'+pct(hb.pass_rate_so_far)+'</div><div class="stat-label">Pass Rate</div></div>'+
       '<div class="stat"><div class="stat-val" style="color:var(--lime)">'+hb.passed_so_far+'</div><div class="stat-label">Passed</div></div>'+
@@ -818,12 +773,9 @@ function renderGenDetail(gen){
       '</div>'+
       '<div style="font-size:.58rem;color:var(--dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Task Progress</div>'+
       '<div class="big-bar-track"><div class="big-bar-fill" style="width:'+barW2+'"></div></div>'+
+      renderTaskRows(gen,progress,null,activeTid)+
       '</div>';
   }
-
-  // ── Task list (replaces old results table) ──────────────────────────────────
-  var taskListHtml=renderTaskList(gen,progress,e,activeTid);
-  if(taskListHtml) html+=taskListHtml;
 
   if(e&&e.failure_breakdown&&Object.keys(e.failure_breakdown).length){
     var bd=e.failure_breakdown,maxV=Math.max.apply(null,Object.values(bd));
