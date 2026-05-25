@@ -395,7 +395,13 @@
   <!-- ═══ MAIN ═══ -->
   <main class="main">
 
-    <!-- GEN DETAIL — shown first so task list is immediately visible -->
+    <!-- TIMELINE — at top so spinner is immediately visible -->
+    <div class="card" style="padding:14px 22px">
+      <div class="card-title" style="margin-bottom:10px">📍 Generation Timeline</div>
+      <div class="timeline" id="timeline"></div>
+    </div>
+
+    <!-- GEN DETAIL -->
     <div id="gen-detail"></div>
 
     <!-- HERO PROGRESS CARD -->
@@ -505,11 +511,6 @@
       <div id="tab-pane-code" style="display:none"></div>
     </div>
 
-    <!-- TIMELINE -->
-    <div class="card">
-      <div class="card-title">📍 Generation Timeline</div>
-      <div class="timeline" id="timeline"></div>
-    </div>
 
   </main>
 </div>
