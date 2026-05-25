@@ -142,20 +142,29 @@ class EvolutionEngine:
         )
         prompt = f"""You are designing Generation {next_gen} of a self-replicating AI coding agent.
 
-FAILURE ANALYSIS (Generation {gen_num}):
+AGGREGATE FAILURE STATISTICS (Generation {gen_num}):
 {failure_ctx}
 
 CURRENT ARCHITECTURE FILES:
 {source_summary}
 
+⚠️  GENERAL IMPROVEMENTS ONLY — DO NOT make task-specific fixes.
+    The agent must improve at solving ANY coding problem, not patch specific test cases.
+    Treat the failure statistics as signals about SYSTEMIC weaknesses in the agent design.
+
+    Error type → architectural root cause:
+      AssertionError  → reasoning/logic gap in Coder agent prompt (add chain-of-thought)
+      SyntaxError     → markdown fences not stripped, or Coder generating prose instead of code
+      ImportError     → Coder hallucinates modules; prompt must restrict to stdlib + task-given libs
+      TimeoutError    → Coder generates O(n²)+ algorithms; prompt must ask for complexity analysis
+      RuntimeError    → edge cases unhandled; Critic/Debugger cycle may need enabling
+
 Write a concise improvement plan (plain text, no code, max 300 words) that explains:
-1. What the root causes of failure are
-2. Which specific files need to change and what must be different
-3. What improvement you expect in Generation {next_gen}'s pass rate
+1. What SYSTEMIC weaknesses the error-type distribution reveals
+2. Which architectural files need to change (agent prompts, topology config, pipeline logic)
+3. What general pass-rate improvement is expected in Generation {next_gen}
 
-Be specific about agent prompts, pipeline logic, and error handling improvements.
-
-ARCHITECTURE CONSTRAINTS (must be preserved in Generation {next_gen}):
+ARCHITECTURE CONSTRAINTS (must be preserved):
 - Pipeline uses LangGraph StateGraph (langgraph>=0.2.0); do NOT revert to custom loops
 - LLM client uses ChatGroq (langchain-groq) — llm_client.py is infra, copied automatically
 - Model: meta-llama/llama-4-scout-17b-16e-instruct on Groq (30k TPM / 500k TPD)"""
@@ -189,20 +198,25 @@ ARCHITECTURE CONSTRAINTS (must be preserved in Generation {next_gen}):
 
 {anti_clone}
 
-IMPROVEMENT PLAN (what changed and why):
+IMPROVEMENT PLAN (architectural changes and why):
 {improvement_log[:600]}
 
-FAILURES TO FIX:
-{failure_ctx[:400]}
+AGGREGATE FAILURE STATISTICS (use as design signals — no task-specific fixes):
+{failure_ctx[:500]}
 
 FILE ROLE: {file_role}
 
 PARENT VERSION (first 400 chars — DO NOT COPY, only use as structural reference):
 {parent_snippet}
 
+⚠️  GENERAL IMPROVEMENTS ONLY:
+    This file must become ARCHITECTURALLY better — improve agent prompts, reasoning
+    strategies, pipeline topology, or error handling in ways that help solve ANY
+    coding task. Do NOT hardcode fixes for specific task inputs or expected outputs.
+
 REQUIREMENTS:
 - File: {fname}  Generation: {next_gen}
-- Fix the failures described above that this file is responsible for
+- Address the SYSTEMIC failure patterns shown in the statistics above
 - llm_client.py is INFRASTRUCTURE (ChatGroq-backed) — do NOT generate it; it is copied automatically
 - LLMClient uses ChatGroq (langchain-groq), reads GROQ_API_KEY from env, max_retries=7
 - Default Groq model: meta-llama/llama-4-scout-17b-16e-instruct (30k TPM / 500k TPD)
@@ -247,16 +261,39 @@ Start with the module docstring. No explanation outside the code."""
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _build_failure_context(self, analysis_report: AnalysisReport, parent_config: Config) -> str:
-        """Compact failure summary for use in every per-file prompt."""
+        """
+        Compact, TASK-AGNOSTIC failure summary for every per-file prompt.
+
+        Intentionally omits task names, problem statements, and sample I/O —
+        those are task-specific details that would cause the LLM to hardcode
+        fixes for individual tasks rather than improve the agent system generally.
+
+        The LLM should only see aggregate error-type statistics and agent
+        attribution so it designs ARCHITECTURAL improvements (better prompting,
+        stronger reasoning, pipeline topology changes) that lift performance
+        across ALL future tasks, not just the ones that failed.
+        """
+        topology = getattr(parent_config, "topology", None)
+        # Convert error breakdown to percentages so the LLM reasons in patterns
+        error_breakdown = dict(getattr(analysis_report, "failure_breakdown", {}))
+        total_failed = max(1, analysis_report.total_tasks - analysis_report.passed)
+        error_pct = {
+            err: f"{count}/{total_failed} failures ({count/total_failed:.0%})"
+            for err, count in error_breakdown.items()
+        }
         data = {
-            "pass_rate": f"{analysis_report.pass_rate:.1%}",
-            "passed": analysis_report.passed,
-            "total": analysis_report.total_tasks,
-            "error_breakdown": analysis_report.failure_breakdown,
-            "agent_failure_counts": getattr(analysis_report, "agent_failure_counts", {}),
-            "sample_failures": getattr(analysis_report, "sample_failures", [])[:2],
-            "topology": getattr(parent_config, "topology", None) and
-                parent_config.topology.to_dict(),
+            "summary": (
+                f"{analysis_report.passed}/{analysis_report.total_tasks} tasks passed "
+                f"({analysis_report.pass_rate:.1%})"
+            ),
+            "error_type_distribution": error_pct,
+            "agent_failure_attribution": getattr(analysis_report, "agent_failure_counts", {}),
+            "current_topology": topology.to_dict() if topology else {},
+            "note": (
+                "These are AGGREGATE error patterns across all tasks. "
+                "Do NOT reference specific task names or inputs. "
+                "Design improvements that raise the pass rate for ANY coding task."
+            ),
         }
         return json.dumps(data, indent=2)
 
