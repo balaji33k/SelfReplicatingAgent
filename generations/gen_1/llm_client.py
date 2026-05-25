@@ -134,6 +134,7 @@ class LLMClient:
 
         logger.debug(f"[llm_client] Using provider={provider} model={self.config.model_name}")
 
+        last_error = ""
         for attempt in range(MAX_RETRIES):
             try:
                 # Re-build request each attempt (body is consumed after first read)
@@ -150,23 +151,28 @@ class LLMClient:
 
             except urllib.error.HTTPError as e:
                 body = e.read().decode()
+                last_error = f"HTTP {e.code} {e.reason} — {body[:300]}"
                 wait = RETRY_BASE_WAIT * (2 ** attempt)
                 logger.error(
                     f"LLM call failed (attempt {attempt+1}/{MAX_RETRIES}): "
-                    f"HTTP {e.code} {e.reason}. Body: {body[:200]}. Retrying in {wait}s..."
+                    f"{last_error}. Retrying in {wait}s..."
                 )
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(wait)
             except Exception as e:
+                last_error = str(e)
                 wait = RETRY_BASE_WAIT * (2 ** attempt)
                 logger.error(
-                    f"LLM call failed (attempt {attempt+1}/{MAX_RETRIES}): {e}. "
+                    f"LLM call failed (attempt {attempt+1}/{MAX_RETRIES}): {last_error}. "
                     f"Retrying in {wait}s..."
                 )
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(wait)
 
-        raise RuntimeError(f"LLM call failed after {MAX_RETRIES} attempts.")
+        raise RuntimeError(
+            f"LLM call failed after {MAX_RETRIES} attempts. "
+            f"Provider={provider}. Last error: {last_error}"
+        )
 
     def chat_completion(
         self, messages: List[Dict], response_format: Optional[Dict] = None
