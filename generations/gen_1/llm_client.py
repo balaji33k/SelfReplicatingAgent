@@ -82,7 +82,11 @@ class LLMClient:
     def __init__(self, config):
         self.config = config
         self._groq_key   = os.getenv("GROQ_API_KEY", "")
-        self._gemini_key = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
+        self._gemini_key = (
+            os.getenv("GEMINI_API_KEY", "")
+            or os.getenv("GOOGLE_API_KEY", "")
+            or os.getenv("GoogleAPIKey", "")
+        )
 
         if not self._groq_key and not self._gemini_key:
             raise EnvironmentError("Neither GROQ_API_KEY nor GEMINI_API_KEY is set.")

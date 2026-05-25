@@ -191,7 +191,9 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
             payload = {
                 "models": ALL_MODELS,
                 "gemini_available": bool(
-                    os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+                    os.environ.get("GEMINI_API_KEY")
+                    or os.environ.get("GOOGLE_API_KEY")
+                    or os.environ.get("GoogleAPIKey")
                 ),
                 "groq_available": bool(os.environ.get("GROQ_API_KEY")),
             }
