@@ -34,6 +34,20 @@ _PROJECT_ROOT = _GEN_DIR.parent.parent if _GEN_DIR.parent.name == "generations" 
 _HEARTBEAT_PATH = _PROJECT_ROOT / "data" / "heartbeat.json"
 
 
+def _write_progress(gen_num: int, task_ids: list, completed: dict) -> None:
+    """Write per-task progress to data/gen_N_progress.json — read by the dashboard."""
+    try:
+        _HEARTBEAT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        path = _HEARTBEAT_PATH.parent / f"gen_{gen_num}_progress.json"
+        path.write_text(json.dumps({
+            "gen": gen_num,
+            "task_list": task_ids,
+            "results": completed,
+        }))
+    except Exception:
+        pass
+
+
 def _write_heartbeat(
     gen_num: int,
     status: str,
@@ -124,8 +138,11 @@ def run_generation(gen_config: Config, generation_number: int):
     passed_count = 0
     failed_count = 0
     total_tasks = len(tasks)
+    task_ids = [t.task_id for t in tasks]
+    completed_progress: dict = {}
 
     _write_heartbeat(generation_number, "RUNNING", 0, total_tasks, 0, 0, "", [])
+    _write_progress(generation_number, task_ids, {})
 
     # 3. Run pipeline for each task
     for i, task in enumerate(tasks):
@@ -163,6 +180,14 @@ def run_generation(gen_config: Config, generation_number: int):
                 passed_count += 1
             else:
                 failed_count += 1
+
+            # Update per-task progress file so dashboard can show live task list
+            completed_progress[task.task_id] = {
+                "status": "pass" if result.success else "fail",
+                "error_type": result.error_type or "",
+                "runtime": round(result.runtime, 2),
+            }
+            _write_progress(generation_number, task_ids, completed_progress)
 
             status = "PASS" if result.success else f"FAIL ({result.error_type})"
             cycle_info = ", ".join(f"{k}={v}" for k, v in result.cycles.items() if v > 0)

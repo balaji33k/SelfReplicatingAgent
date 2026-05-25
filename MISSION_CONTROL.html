@@ -247,6 +247,27 @@
     .eta-chip{background:rgba(255,179,0,.1);border:1px solid rgba(255,179,0,.3);
       border-radius:8px;padding:4px 10px;font-size:.58rem;color:var(--amber);font-family:var(--mono)}
 
+    /* ── Task list ── */
+    .task-list{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+    .task-row{display:flex;align-items:center;gap:10px;padding:6px 10px;
+      border-radius:8px;font-size:.63rem;font-family:var(--mono);transition:.15s}
+    .task-row.t-run{background:rgba(0,243,255,.06);border:1px solid rgba(0,243,255,.18)}
+    .task-row.t-pass{opacity:.6}
+    .task-row.t-fail{background:rgba(255,49,49,.05);cursor:pointer}
+    .task-row.t-fail:hover{background:rgba(255,49,49,.12);border:1px solid rgba(255,49,49,.2)}
+    .task-row.t-pend{opacity:.22}
+    .task-icon{width:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+    .task-id{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .task-err{font-size:.56rem;color:var(--red);white-space:nowrap;flex-shrink:0}
+    .task-rt{font-size:.52rem;color:var(--dim);white-space:nowrap;flex-shrink:0}
+    /* Collapse */
+    .collapse-hdr{display:flex;justify-content:space-between;align-items:center;
+      cursor:pointer;padding:4px 0;user-select:none}
+    .collapse-hdr:hover .collapse-btn{border-color:var(--cyan);color:var(--cyan)}
+    .collapse-btn{background:none;border:1px solid var(--border);color:var(--dim);
+      border-radius:6px;padding:3px 10px;font-size:.55rem;cursor:pointer;
+      font-family:var(--font);transition:.2s;white-space:nowrap}
+
     /* ── Live activity line ── */
     .activity-wrap{margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
     .activity-text{font-family:var(--mono);font-size:.63rem;color:var(--text);
@@ -390,7 +411,11 @@
 </div>
 
 <script>
-var STATE={heartbeat:null,evolutionLog:[],benchmarkMatrix:null,activeGen:null};
+var STATE={heartbeat:null,evolutionLog:[],benchmarkMatrix:null,activeGen:null,
+  genProgress:{},   // gen_num → {task_list, results}
+  collapsed:new Set(),  // gens collapsed by user or auto
+  userExpanded:new Set() // gens user explicitly opened
+};
 var PREV_TASK='';
 var TASK_START=null;
 var COLORS=['#00f3ff','#ff00ff','#39ff14','#ffb300','#ff3131','#a78bfa','#fb7185'];
@@ -409,6 +434,22 @@ async function refresh(){
   if(results[0])STATE.heartbeat=results[0];
   if(results[1])STATE.evolutionLog=Array.isArray(results[1])?results[1]:[];
   if(results[2])STATE.benchmarkMatrix=results[2];
+
+  // Load progress for all known gens
+  var knownGens=getKnownGens();
+  await Promise.all(knownGens.map(async function(g){
+    var p=await loadJSON('data/gen_'+g+'_progress.json');
+    if(p)STATE.genProgress[g]=p;
+  }));
+
+  // Auto-collapse gens that are no longer active (unless user explicitly expanded)
+  if(STATE.heartbeat){
+    var ag=STATE.heartbeat.active_gen||1;
+    knownGens.forEach(function(g){
+      if(g<ag&&!STATE.userExpanded.has(g))STATE.collapsed.add(g);
+    });
+  }
+
   if(STATE.activeGen===null&&STATE.heartbeat)STATE.activeGen=STATE.heartbeat.active_gen||1;
   renderAll();
   document.getElementById('last-upd-label').textContent='Updated '+new Date().toLocaleTimeString();
@@ -531,6 +572,88 @@ function renderHero(){
   }
 }
 
+/* ══ TASK LIST ══ */
+function toggleCollapse(gen,e){
+  e.stopPropagation();
+  if(STATE.collapsed.has(gen)){
+    STATE.collapsed.delete(gen);
+    STATE.userExpanded.add(gen);
+  } else {
+    STATE.collapsed.add(gen);
+    STATE.userExpanded.delete(gen);
+  }
+  renderGenDetail(gen);
+}
+
+function renderTaskList(gen,progress,evoEntry,activeTid){
+  // Build task list: prefer live progress file, fallback to evolution log entry
+  var taskList=[],resultsMap={};
+  if(progress&&progress.task_list&&progress.task_list.length){
+    taskList=progress.task_list;
+    Object.keys(progress.results||{}).forEach(function(tid){
+      resultsMap[tid]=progress.results[tid];
+    });
+  } else if(evoEntry&&evoEntry.task_results&&evoEntry.task_results.length){
+    taskList=evoEntry.task_results.map(function(r){return r.task_id;});
+    evoEntry.task_results.forEach(function(r){resultsMap[r.task_id]=r;});
+  }
+  if(!taskList.length) return '';
+
+  var passCount=0,failCount=0,pending=0;
+  var rows=taskList.map(function(tid){
+    var r=resultsMap[tid];
+    var isActive=tid===activeTid;
+    var icon,cls;
+    if(isActive){
+      icon='<div class="spinner spinner-cyan" style="width:11px;height:11px"></div>';
+      cls='t-run';
+    } else if(r){
+      var pass=(r.status==='pass'||r.success===true);
+      if(pass){icon='<span style="color:var(--lime)">✓</span>';cls='t-pass';passCount++;}
+      else{icon='<span style="color:var(--red)">✗</span>';cls='t-fail';failCount++;}
+    } else {
+      icon='<span style="opacity:.3">·</span>';cls='t-pend';pending++;
+    }
+    var errHtml=r&&!isActive&&(r.error_type||r.error_type==='')?
+      (r.error_type?'<div class="task-err">'+r.error_type+'</div>':''):'';
+    var rtHtml=r&&r.runtime?'<div class="task-rt">'+r.runtime+'s</div>':'';
+    // Build safe onclick data for failed tasks
+    var clickHtml='';
+    if(r&&cls==='t-fail'){
+      var safeRow=JSON.stringify({
+        task_id:tid,status:'fail',
+        error_type:r.error_type||'',
+        agents_used:r.agents_used||[],
+        cycles:r.cycles||{}
+      }).replace(/"/g,'&quot;');
+      clickHtml=' onclick="openDrawer('+safeRow+','+gen+')"';
+    }
+    return '<div class="task-row '+cls+'"'+clickHtml+'>'+
+      '<div class="task-icon">'+icon+'</div>'+
+      '<div class="task-id">'+tid+'</div>'+
+      errHtml+rtHtml+
+    '</div>';
+  }).join('');
+
+  var isCollapsed=STATE.collapsed.has(gen);
+  var summary='<span style="color:var(--lime)">'+passCount+' ✓</span> '+
+    '<span style="color:var(--red)">'+failCount+' ✗</span>'+
+    (pending?' <span style="color:var(--dim)">'+pending+' pending</span>':'');
+
+  return '<div class="card">'+
+    '<div class="collapse-hdr" onclick="toggleCollapse('+gen+',event)">'+
+      '<div class="card-title" style="margin-bottom:0">'+
+        'Benchmark Tasks — Gen '+gen+
+        ' &nbsp;<span style="font-weight:400;font-size:.6rem">'+summary+'</span>'+
+      '</div>'+
+      '<button class="collapse-btn">'+
+        (isCollapsed?'▶ Show '+taskList.length+' tasks':'▼ Collapse')+
+      '</button>'+
+    '</div>'+
+    (isCollapsed?'':'<div class="task-list" style="margin-top:10px">'+rows+'</div>')+
+  '</div>';
+}
+
 /* ══ PHASE HELPERS ══ */
 var PHASE_LABELS={
   'thinking':                  '🧠 Thinking — Analyst decomposing the problem…',
@@ -613,7 +736,9 @@ function renderTimeline(){
 /* ══ GEN DETAIL ══ */
 function renderGenDetail(gen){
   var e=getEvoEntry(gen),hb=STATE.heartbeat,matrix=STATE.benchmarkMatrix;
+  var progress=STATE.genProgress[gen]||null;
   var live=hb&&hb.active_gen===gen&&(hb.status==='RUNNING'||hb.status==='ANALYSING');
+  var activeTid=(live&&hb)?hb.active_task_id:'';
   var html='';
 
   if(e){
@@ -646,6 +771,10 @@ function renderGenDetail(gen){
       '</div>';
   }
 
+  // ── Task list (replaces old results table) ──────────────────────────────────
+  var taskListHtml=renderTaskList(gen,progress,e,activeTid);
+  if(taskListHtml) html+=taskListHtml;
+
   if(e&&e.failure_breakdown&&Object.keys(e.failure_breakdown).length){
     var bd=e.failure_breakdown,maxV=Math.max.apply(null,Object.values(bd));
     var bars=Object.entries(bd).sort(function(a,b){return b[1]-a[1];}).map(function(kv,i){
@@ -654,24 +783,13 @@ function renderGenDetail(gen){
         '<div class="bd-track"><div class="bd-fill" style="width:'+p2+'%;background:'+COLORS[i%COLORS.length]+'"></div></div>'+
         '<div class="bd-count">'+kv[1]+'</div></div>';
     }).join('');
-    html+='<div class="card"><div class="card-title">Failure Breakdown</div><div class="breakdown">'+bars+'</div></div>';
+    html+='<div class="card"><div class="card-title">Failure Breakdown by Error Type</div><div class="breakdown">'+bars+'</div></div>';
   }
 
   if(e&&e.agent_failure_counts&&Object.keys(e.agent_failure_counts).length){
     var items=Object.entries(e.agent_failure_counts).sort(function(a,b){return b[1]-a[1];})
       .map(function(kv){return '<div class="attr-item"><div class="attr-count">'+kv[1]+'</div><div class="attr-name">'+kv[0]+'</div></div>';}).join('');
     html+='<div class="card"><div class="card-title">Agent Failure Attribution</div><div class="attr-grid">'+items+'</div></div>';
-  }
-
-  if(e&&e.task_results&&e.task_results.length){
-    html+='<div class="card"><div class="card-title">Benchmark Results — Gen '+gen+'</div>'+
-      '<div class="filter-bar">'+
-      '<button class="filter-btn active" onclick="filterTable(this,\'all\','+gen+')">All</button>'+
-      '<button class="filter-btn" onclick="filterTable(this,\'pass\','+gen+')">✅ Pass</button>'+
-      '<button class="filter-btn" onclick="filterTable(this,\'fail\','+gen+')">❌ Fail</button>'+
-      '</div>'+
-      '<table><thead><tr><th>Task</th><th>Status</th><th>Error</th><th>Agents</th></tr></thead>'+
-      '<tbody id="results-body-'+gen+'">'+renderRows(e.task_results,'all',gen)+'</tbody></table></div>';
   }
 
   if(matrix&&matrix.matrix&&matrix.gens&&matrix.gens.length>1)html+=renderMatrix(matrix,gen);
@@ -784,6 +902,27 @@ function openDrawer(row,gen){
       }
       var escaped=data.final_code
         .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      // Test results table (expected vs actual)
+      var testHtml='';
+      if(data.test_results&&data.test_results.length){
+        var trows=data.test_results.map(function(tr){
+          var ok=tr.passed;
+          return '<tr>'+
+            '<td style="color:var(--dim);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
+              JSON.stringify(tr.input).slice(0,60)+'</td>'+
+            '<td style="color:var(--dim)">'+JSON.stringify(tr.expected).slice(0,60)+'</td>'+
+            '<td style="color:'+(ok?'var(--lime)':'var(--red)')+'">'+
+              (tr.error?'⚠ '+tr.error.slice(0,40):JSON.stringify(tr.actual).slice(0,60))+'</td>'+
+            '<td><span class="pill '+(ok?'pass-pill':'fail-pill')+'">'+(ok?'PASS':'FAIL')+'</span></td>'+
+          '</tr>';
+        }).join('');
+        testHtml='<div style="margin-top:16px">'+
+          '<div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Test Results</div>'+
+          '<table style="font-size:.6rem"><thead><tr>'+
+            '<th>Input</th><th>Expected</th><th>Actual</th><th>Status</th>'+
+          '</tr></thead><tbody>'+trows+'</tbody></table></div>';
+      }
+
       codeEl.innerHTML=
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
           '<span style="font-size:.55rem;color:var(--dim)">python</span>'+
@@ -792,8 +931,8 @@ function openDrawer(row,gen){
             'border-radius:6px;padding:3px 10px;font-size:.55rem;cursor:pointer;font-family:var(--font)">Copy</button>'+
         '</div>'+
         '<pre style="margin:0;max-height:400px;overflow-y:auto"><code>'+escaped+'</code></pre>'+
-        (data.stdout?'<div style="margin-top:14px"><div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Stdout</div><pre style="margin:0;color:var(--lime)">'+data.stdout.replace(/</g,'&lt;')+'</pre></div>':'')+
-        (data.stderr&&!pass?'<div style="margin-top:14px"><div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Stderr</div><pre style="margin:0;color:var(--red)">'+data.stderr.replace(/</g,'&lt;').slice(0,600)+'</pre></div>':'');
+        testHtml+
+        (data.stderr&&!pass?'<div style="margin-top:14px"><div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Stderr</div><pre style="margin:0;color:var(--red)">'+data.stderr.replace(/</g,'&lt;').slice(0,800)+'</pre></div>':'');
     })
     .catch(function(){
       var el=document.getElementById('code-loading');
