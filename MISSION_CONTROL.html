@@ -1351,29 +1351,68 @@ function fmtTime(iso){
 
 function renderTokenBudget(){
   var tu=STATE.tokenUsage;
+  var ms=STATE.modelStatus||{};
   var card=document.getElementById('token-budget-card');
   if(!tu||!tu.model){card.style.display='none';return;}
   card.style.display='block';
 
-  var pctUsed=tu.pct_used||0;
-  var pctStr=(pctUsed*100).toFixed(1);
-  // Bar color: green → amber → red as budget shrinks
-  var barColor=pctUsed<0.6?'var(--lime)':pctUsed<0.85?'var(--amber)':'var(--red)';
-  var pctColor=pctUsed<0.6?'var(--lime)':pctUsed<0.85?'var(--amber)':'var(--red)';
+  // ── Determine true exhaustion state from model_status.json ──────────────
+  // token_usage.json only counts THIS session (resets on restart).
+  // model_status.json shows what Groq actually told us during fallback switching.
+  var activeModel=ms.active||tu.model||'';
+  var tpdExhausted=ms.tpd_exhausted||[];
+  var unavailable=ms.unavailable||[];
+  var primaryModel='meta-llama/llama-4-scout-17b-16e-instruct';
+  var primaryExhausted=tpdExhausted.indexOf(primaryModel)>=0;
+  var onFallback=(activeModel!==primaryModel&&activeModel!=='');
+  var allExhausted=(tpdExhausted.length+unavailable.length)>=6;
 
-  // Full model path and short name for display
-  var modelFull=tu.model||'unknown';
+  // What to show for the budget bar:
+  // If Groq reported primary TPD exhausted, show bar as ~99% (honest signal)
+  // otherwise show what the local counter says
+  var localPct=tu.pct_used||0;
+  var displayPct, displayUsed, displayRemaining, budgetNote='';
+
+  if(primaryExhausted){
+    // Groq rolling-window is near-full even though our session only used a few tokens
+    displayPct=0.99;
+    displayUsed='~500k (rolling 24h window)';
+    displayRemaining='Refills gradually over 24h';
+    budgetNote='<div style="margin-top:8px;padding:8px 12px;background:rgba(255,49,49,.08);'+
+      'border:1px solid rgba(255,49,49,.3);border-radius:8px;font-size:.68rem;color:#ff9999;line-height:1.5">'+
+      '⚠️ <strong>Groq\'s rolling 24-hour window is exhausted</strong> from earlier runs today.<br>'+
+      'The '+fmtNum(tu.total_tokens_used)+' shown above is only what <em>this session</em> used — '+
+      'it resets each restart. Groq\'s server-side counter still holds ~500k tokens.<br>'+
+      '<strong>Tokens free up gradually as the 24h window rolls. Full reset in ~'+_hoursUntilReset()+'.</strong>'+
+      '</div>';
+  } else {
+    displayPct=localPct;
+    displayUsed=fmtNum(tu.total_tokens_used)+' used this session';
+    displayRemaining=fmtNum(tu.tokens_remaining)+' remaining';
+  }
+
+  var pctStr=(displayPct*100).toFixed(1);
+  var barColor=displayPct<0.6?'var(--lime)':displayPct<0.85?'var(--amber)':'var(--red)';
+  var pctColor=barColor;
+
+  // ── Active model display ─────────────────────────────────────────────────
+  var modelFull=activeModel||tu.model||'unknown';
   var modelShort=modelFull.includes('/')?modelFull.split('/').pop():modelFull;
+  var fallbackNote='';
+  if(onFallback){
+    var fb=_GROQ_MODELS.find(function(x){return x.id===activeModel;})||{name:modelFull};
+    fallbackNote='<span style="font-size:.6rem;color:var(--amber);border:1px solid rgba(255,179,0,.3);'+
+      'padding:1px 6px;border-radius:4px;margin-left:6px">FALLBACK</span>';
+  }
 
-  // Per-agent rows, sorted by tokens desc
+  // Per-agent rows
   var agents=Object.entries(tu.per_agent||{})
     .sort(function(a,b){return b[1].tokens-a[1].tokens;});
   var maxTok=agents.length?Math.max.apply(null,agents.map(function(e){return e[1].tokens;})):1;
-
   var agentHtml='';
   if(agents.length){
     agentHtml='<div class="tb-divider"></div>'+
-      '<div class="tb-agents-label">Per-Agent Usage (all agents → same model)</div>';
+      '<div class="tb-agents-label">Per-Agent Usage (this session)</div>';
     agents.forEach(function(entry){
       var name=entry[0], info=entry[1];
       var barW=maxTok?Math.round(info.tokens/maxTok*100):0;
@@ -1381,49 +1420,57 @@ function renderTokenBudget(){
         '<div class="tb-agent-row">'+
           '<div class="tb-agent-name">'+name+'</div>'+
           '<div class="tb-agent-tokens">'+fmtNum(info.tokens)+'</div>'+
-          '<div class="tb-agent-bar-wrap">'+
-            '<div class="tb-agent-bar" style="width:'+barW+'%"></div>'+
-          '</div>'+
+          '<div class="tb-agent-bar-wrap"><div class="tb-agent-bar" style="width:'+barW+'%"></div></div>'+
           '<div class="tb-agent-calls">'+info.calls+' call'+(info.calls!==1?'s':'')+'</div>'+
         '</div>';
     });
   } else {
     agentHtml='<div class="tb-divider"></div>'+
-      '<div class="tb-empty">No API calls yet — tracking will appear here once evolution starts.</div>';
+      '<div class="tb-empty">No API calls yet this session.</div>';
   }
 
   var html=
     '<div class="tb-header">'+
       '<div>'+
-        '<div class="tb-model-name" title="'+modelFull+'">'+modelShort+'</div>'+
+        '<div class="tb-model-name" title="'+modelFull+'">'+modelShort+fallbackNote+'</div>'+
         '<div class="tb-chips">'+
           '<span class="tb-chip tb-chip-groq">GROQ</span>'+
           '<span class="tb-chip tb-chip-stat">'+fmtNum(tu.tpm_limit)+' TPM</span>'+
           '<span class="tb-chip tb-chip-stat">'+fmtNum(tu.daily_limit_tokens)+' TPD</span>'+
-          '<span class="tb-chip tb-chip-stat" style="color:var(--dim);font-size:.5rem" title="Full model ID: '+modelFull+'">'+modelFull+'</span>'+
+          '<span class="tb-chip tb-chip-stat" style="color:var(--dim);font-size:.5rem" title="'+modelFull+'">'+modelFull+'</span>'+
         '</div>'+
       '</div>'+
     '</div>'+
 
     '<div class="tb-budget-wrap">'+
       '<div class="tb-budget-header">'+
-        '<span class="tb-budget-label">Daily Token Budget</span>'+
+        '<span class="tb-budget-label">Daily Token Budget (Groq rolling 24h)</span>'+
         '<span class="tb-budget-pct" style="color:'+pctColor+'">'+pctStr+'% used</span>'+
       '</div>'+
       '<div class="tb-bar-track">'+
         '<div class="tb-bar-fill" style="width:'+pctStr+'%;background:'+barColor+'"></div>'+
       '</div>'+
       '<div class="tb-bar-meta">'+
-        '<span class="tb-bar-used">'+fmtNum(tu.total_tokens_used)+' used</span>'+
-        '<span class="tb-bar-left">'+fmtNum(tu.tokens_remaining)+' remaining</span>'+
+        '<span class="tb-bar-used">'+displayUsed+'</span>'+
+        '<span class="tb-bar-left" style="color:'+(primaryExhausted?'var(--amber)':'var(--lime)')+'">'+displayRemaining+'</span>'+
       '</div>'+
     '</div>'+
-
+    budgetNote+
     agentHtml+
-
     '<div class="tb-timestamp">Last updated: '+fmtTime(tu.last_updated)+'</div>';
 
   document.getElementById('token-budget-content').innerHTML=html;
+}
+
+function _hoursUntilReset(){
+  // Groq rolling 24h window — tokens used at time T expire at T+24h.
+  // We don't know exactly when past tokens were used, so we estimate
+  // "full reset" as midnight UTC (conservative but useful).
+  var now=new Date();
+  var utcH=now.getUTCHours(), utcM=now.getUTCMinutes();
+  var minsLeft=(24*60)-(utcH*60+utcM);
+  var h=Math.floor(minsLeft/60), m=minsLeft%60;
+  return h+'h '+m+'m';
 }
 
 /* ══ SIDEBAR NAV ══ */
