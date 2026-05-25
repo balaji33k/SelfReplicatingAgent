@@ -39,6 +39,12 @@ class AnalystAgent(SpecialistAgent):
         self._log_end(spec)
         return spec
 
+    # Max chars of the raw problem statement to include in the prompt.
+    # xarray / SWE-bench issues can be 30k+ chars (≈8k tokens) which exhausts
+    # the entire daily token budget on the first run.  3,000 chars ≈ 750 tokens —
+    # enough context for the agent to understand the problem without burning budget.
+    _MAX_PROBLEM_CHARS = 3000
+
     def _build_prompt(self, task: TaskContract) -> str:
         test_preview = ""
         if task.test_cases:
@@ -49,11 +55,20 @@ class AnalystAgent(SpecialistAgent):
 
         sig_hint = f"\nFunction signature: {task.signature}" if task.signature else ""
 
+        # Truncate very long problem statements (e.g. SWE-bench GitHub issues)
+        # to stay within Groq's per-day token budget.
+        problem = task.problem_statement or ""
+        if len(problem) > self._MAX_PROBLEM_CHARS:
+            problem = (
+                problem[: self._MAX_PROBLEM_CHARS]
+                + f"\n[...truncated: original was {len(task.problem_statement):,} chars]"
+            )
+
         return f"""You are a requirements analyst. Your only job is to deeply understand this problem.
 You must NOT write any code or suggest any algorithm. Only analyse and document requirements.
 
 PROBLEM:
-{task.problem_statement}
+{problem}
 {sig_hint}
 {test_preview}
 
