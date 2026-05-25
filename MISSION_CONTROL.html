@@ -311,8 +311,10 @@
   <!-- ═══ MAIN ═══ -->
   <main class="main">
 
+    <!-- GEN DETAIL — shown first so task list is immediately visible -->
+    <div id="gen-detail"></div>
+
     <!-- HERO PROGRESS CARD -->
-    <div class="hero-card" id="hero-card">
       <div class="hero-top">
         <div>
           <div class="hero-gen" id="hero-gen-num">Gen 1</div>
@@ -403,9 +405,6 @@
       <div class="card-title">📍 Generation Timeline</div>
       <div class="timeline" id="timeline"></div>
     </div>
-
-    <!-- GEN DETAIL -->
-    <div id="gen-detail"></div>
 
   </main>
 </div>
@@ -740,18 +739,19 @@ function renderTimeline(){
 function renderGenDetail(gen){
   var e=getEvoEntry(gen),hb=STATE.heartbeat,matrix=STATE.benchmarkMatrix;
   var progress=STATE.genProgress[gen]||null;
-  var live=hb&&hb.active_gen===gen&&(hb.status==='RUNNING'||hb.status==='ANALYSING');
-  var activeTid=(live&&hb)?hb.active_task_id:'';
+  var live=hb&&hb.active_gen===gen&&(hb.status==='RUNNING'||hb.status==='ANALYSING'||hb.status==='SPAWNING');
+  var activeTid=(hb&&hb.active_gen===gen&&hb.status==='RUNNING')?hb.active_task_id:'';
   var html='';
 
   if(e){
+    // Generation completed — show final overview with task list
     var passed=e.passed||0,total=e.total||0,failed=total-passed;
     var delta=e.improvement_delta;
     var dHtml=delta===null||delta===undefined
       ?'<span class="delta-pend">Awaiting next gen…</span>'
       :delta>=0?'<span class="delta-pos">▲ '+pct(delta)+' vs parent</span>'
               :'<span class="delta-neg">▼ '+pct(Math.abs(delta))+' vs parent</span>';
-    html+='<div class="card"><div class="card-title">Generation '+gen+' — Overview</div>'+
+    html+='<div class="card"><div class="card-title">Generation '+gen+'</div>'+
       '<div class="stat-grid">'+
       '<div class="stat"><div class="stat-val">'+pct(e.pass_rate_actual)+'</div><div class="stat-label">Pass Rate</div></div>'+
       '<div class="stat"><div class="stat-val" style="color:var(--lime)">'+passed+'</div><div class="stat-label">Passed</div></div>'+
@@ -761,19 +761,26 @@ function renderGenDetail(gen){
       renderTaskRows(gen,progress,e,activeTid)+
       '</div>';
   } else if(live){
+    // Generation running — show live stats + task list
     var parts2=(hb.progress||'0/0').split('/').map(Number);
     var d2=parts2[0]||0,t2=parts2[1]||0;
     var barW2=t2?pct2str(d2/t2):'0%';
-    html+='<div class="card"><div class="card-title">Generation '+gen+' — Live</div>'+
+    html+='<div class="card"><div class="card-title">Generation '+gen+
+      ' <span style="font-size:.6rem;color:var(--lime);font-weight:400">● '+hb.status+'</span></div>'+
       '<div class="stat-grid" style="margin-bottom:16px">'+
       '<div class="stat"><div class="stat-val">'+pct(hb.pass_rate_so_far)+'</div><div class="stat-label">Pass Rate</div></div>'+
       '<div class="stat"><div class="stat-val" style="color:var(--lime)">'+hb.passed_so_far+'</div><div class="stat-label">Passed</div></div>'+
       '<div class="stat"><div class="stat-val" style="color:var(--red)">'+hb.failed_so_far+'</div><div class="stat-label">Failed</div></div>'+
       '<div class="stat"><div class="stat-val" style="font-size:.95rem;color:var(--amber)">'+hb.progress+'</div><div class="stat-label">Progress</div></div>'+
       '</div>'+
-      '<div style="font-size:.58rem;color:var(--dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Task Progress</div>'+
-      '<div class="big-bar-track"><div class="big-bar-fill" style="width:'+barW2+'"></div></div>'+
+      '<div class="big-bar-track" style="margin-bottom:4px"><div class="big-bar-fill" style="width:'+barW2+'"></div></div>'+
+      (hb.current_phase?'<div style="font-size:.6rem;color:var(--cyan);margin-bottom:4px">'+phaseLabel(hb.current_phase)+'</div>':'')+
       renderTaskRows(gen,progress,null,activeTid)+
+      '</div>';
+  } else if(progress&&progress.task_list&&progress.task_list.length){
+    // Have progress data but not yet tracked in evolution log — show task list only
+    html+='<div class="card"><div class="card-title">Generation '+gen+'</div>'+
+      renderTaskRows(gen,progress,null,'')+
       '</div>';
   }
 
