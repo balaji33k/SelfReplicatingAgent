@@ -93,6 +93,10 @@ class LLMClient:
         if not self._groq_key and not self._gemini_key:
             raise EnvironmentError("Neither GROQ_API_KEY nor GEMINI_API_KEY is set.")
 
+        # Hard cap: if a single API call takes longer than this, treat it as a hung
+        # connection and raise so the retry loop can switch models.
+        self._call_timeout = 120   # 2 minutes max per call
+
         # Track exhausted/unavailable models across both providers
         self._exhausted_models: set = set()
         self._tpd_exhausted:    set = set()
@@ -141,8 +145,8 @@ class LLMClient:
                 google_api_key=self._gemini_key,
                 temperature=self.config.temperature,
                 max_output_tokens=8192,
-                timeout=self.config.timeout_seconds,
-                max_retries=2,
+                timeout=90,        # 90s hard cap — never hang longer than this
+                max_retries=1,
             )
         else:
             if not self._groq_key:
@@ -152,8 +156,8 @@ class LLMClient:
                 temperature=self.config.temperature,
                 api_key=self._groq_key,
                 max_tokens=8192,
-                timeout=self.config.timeout_seconds,
-                max_retries=2,
+                timeout=90,        # 90s hard cap — never hang longer than this
+                max_retries=1,
             )
 
     # ── Public interface ──────────────────────────────────────────────────────
@@ -201,7 +205,14 @@ class LLMClient:
                         or "quota" in err_str.lower()
                         or "resource_exhausted" in err_str.lower()
                     )
+                    is_timeout = (
+                        "timeout" in err_str.lower()
+                        or "timed out" in err_str.lower()
+                        or type(exc).__name__ in ("TimeoutError", "ReadTimeout",
+                                                   "ConnectTimeout", "HTTPStatusError")
+                    )
                     is_unavailable = (
+                        not is_timeout and (
                         "404" in err_str
                         or "model_not_found" in err_str
                         or "does not exist" in err_str
@@ -209,11 +220,22 @@ class LLMClient:
                         or "decommissioned" in err_str.lower()
                         or "no longer supported" in err_str.lower()
                         or "not found" in err_str.lower()
+                        )
                     )
 
                     current_model = self.config.model_name
 
-                    if is_rate_limit:
+                    if is_timeout:
+                        logger.warning(
+                            f"[llm_client] Timeout on {current_model} after 90s — "
+                            f"switching to next model"
+                        )
+                        self._exhausted_models.add(current_model)
+                        self._flush_model_status()
+                        if not self._switch_to_next_model():
+                            break
+
+                    elif is_rate_limit:
                         retry_sec = self._parse_retry_seconds(err_str)
                         logger.debug(
                             f"[llm_client] rate-limit on {current_model} — "
