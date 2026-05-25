@@ -149,6 +149,38 @@
     .gen-btn-bar{height:2px;background:rgba(255,255,255,.06);border-radius:2px;margin-top:6px;overflow:hidden}
     .gen-btn-bar-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--magenta));transition:width .8s ease}
 
+    /* ── Tabs ── */
+    .tab-bar{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px}
+    .tab-btn{background:none;border:none;color:var(--dim);font-size:.65rem;font-weight:700;
+      padding:8px 16px;cursor:pointer;border-bottom:2px solid transparent;transition:.2s;letter-spacing:.04em}
+    .tab-btn:hover{color:var(--fg)}
+    .tab-btn.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+    .summary-section{margin-bottom:14px}
+    .summary-title{font-size:.56rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+    .summary-desc{font-size:.75rem;color:var(--fg);line-height:1.5;margin-bottom:12px}
+    .check-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:.65rem}
+    .check-icon{width:18px;text-align:center;font-size:.75rem;flex-shrink:0}
+    .phase-check-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
+    .phase-check{padding:8px 10px;border-radius:8px;border:1px solid var(--border);text-align:center;font-size:.62rem}
+    .phase-check.ok{border-color:rgba(57,255,20,.3);background:rgba(57,255,20,.06);color:var(--lime)}
+    .phase-check.fail{border-color:rgba(255,49,49,.3);background:rgba(255,49,49,.06);color:var(--red)}
+    .phase-check.pend{color:var(--dim)}
+    .code-wrap{background:#0a0a0f;border:1px solid var(--border);border-radius:8px;
+      overflow:auto;max-height:420px;padding:14px;position:relative}
+    .code-wrap pre{margin:0;font-size:.65rem;font-family:var(--mono);line-height:1.6;
+      color:#e2e8f0;white-space:pre;overflow-x:auto}
+    .code-copy-btn{position:absolute;top:8px;right:8px;background:rgba(0,243,255,.12);
+      border:1px solid rgba(0,243,255,.3);color:var(--cyan);font-size:.58rem;padding:3px 8px;
+      border-radius:6px;cursor:pointer}
+    .code-copy-btn:hover{background:rgba(0,243,255,.25)}
+    /* ── Topology ── */
+    .topo-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+    .topo-agent{padding:8px 14px;border-radius:10px;border:1px solid var(--border);
+      font-size:.62rem;font-weight:700;display:flex;align-items:center;gap:6px}
+    .topo-agent.on{border-color:rgba(57,255,20,.4);background:rgba(57,255,20,.07);color:var(--lime)}
+    .topo-agent.off{opacity:.35;color:var(--dim)}
+    .topo-agent.always{border-color:rgba(0,243,255,.35);background:rgba(0,243,255,.07);color:var(--cyan)}
+
     /* ── Sidebar task list ── */
     .sb-task-list{display:flex;flex-direction:column;gap:1px;margin-top:8px;
       max-height:320px;overflow-y:auto;border-top:1px solid var(--border);padding-top:6px}
@@ -414,6 +446,22 @@
       </div>
     </div>
 
+    <!-- TASK SUMMARY + CODE TABS -->
+    <div class="card" id="task-tabs-card" style="display:none">
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tab-btn-summary" onclick="switchTab('summary')">📋 Summary</button>
+        <button class="tab-btn" id="tab-btn-code" onclick="switchTab('code')">💻 Code Generated</button>
+      </div>
+      <div id="tab-pane-summary"></div>
+      <div id="tab-pane-code" style="display:none"></div>
+    </div>
+
+    <!-- TOPOLOGY -->
+    <div class="card" id="topology-card" style="display:none">
+      <div class="card-title">🔧 Pipeline Topology — Generation <span id="topo-gen-num">1</span></div>
+      <div id="topology-content"></div>
+    </div>
+
     <!-- TIMELINE -->
     <div class="card">
       <div class="card-title">📍 Generation Timeline</div>
@@ -425,9 +473,11 @@
 
 <script>
 var STATE={heartbeat:null,evolutionLog:[],benchmarkMatrix:null,activeGen:null,
-  genProgress:{},   // gen_num → {task_list, results}
+  genProgress:{},   // gen_num → {task_list, results, descriptions}
   collapsed:new Set(),  // gens collapsed by user or auto
-  userExpanded:new Set() // gens user explicitly opened
+  userExpanded:new Set(), // gens user explicitly opened
+  activeTab:'summary',   // 'summary' | 'code'
+  lastCode:null          // {gen, task_id, final_code, stdout, stderr, error_type, phase_results}
 };
 var PREV_TASK='';
 var TASK_START=null;
@@ -473,6 +523,182 @@ function renderAll(){
   renderSidebarNav();
   renderTimeline();
   if(STATE.activeGen!==null)renderGenDetail(STATE.activeGen);
+  renderTaskTabs();
+  renderTopology();
+}
+
+/* ══ TABS: SUMMARY + CODE ══ */
+function switchTab(tab){
+  STATE.activeTab=tab;
+  ['summary','code'].forEach(function(t){
+    document.getElementById('tab-btn-'+t).classList.toggle('active',t===tab);
+    document.getElementById('tab-pane-'+t).style.display=t===tab?'block':'none';
+  });
+  if(tab==='code') fetchAndRenderCode();
+}
+
+function renderTaskTabs(){
+  var hb=STATE.heartbeat;
+  var card=document.getElementById('task-tabs-card');
+  if(!hb||(hb.status!=='RUNNING'&&hb.status!=='ANALYSING')){card.style.display='none';return;}
+  card.style.display='block';
+  if(STATE.activeTab==='summary') renderSummaryPane();
+  else fetchAndRenderCode();
+}
+
+function renderSummaryPane(){
+  var hb=STATE.heartbeat;
+  if(!hb)return;
+  var gen=hb.active_gen;
+  var tid=hb.active_task_id||'';
+  var progress=STATE.genProgress[gen]||{};
+  var descs=progress.descriptions||{};
+  var desc=descs[tid]||tid||'—';
+  var pr=hb.phase_results||{};
+  var phase=hb.current_phase||'';
+
+  // What went right
+  var rights=[];
+  if(pr.compile===true) rights.push('Compilation passed');
+  if(pr.unit_tests===true) rights.push('Unit tests passed');
+  if(pr.integration_tests===true) rights.push('Integration tests passed');
+
+  // What went wrong
+  var wrongs=[];
+  if(pr.compile===false) wrongs.push('Compilation failed');
+  if(pr.unit_tests===false) wrongs.push('Unit tests failed');
+  if(pr.integration_tests===false) wrongs.push('Integration tests failed');
+
+  function phaseBox(label,val){
+    var cls=val===true?'ok':val===false?'fail':'pend';
+    var icon=val===true?'✓':val===false?'✗':'—';
+    return '<div class="phase-check '+cls+'"><div style="font-size:.9rem">'+icon+'</div><div>'+label+'</div></div>';
+  }
+
+  var html=
+    '<div class="summary-section">'+
+      '<div class="summary-title">Current Task</div>'+
+      '<div class="summary-desc">'+desc+
+        (tid?'<span style="font-size:.58rem;color:var(--dim);margin-left:8px">'+tid+'</span>':'')+
+      '</div>'+
+      (phase?'<div style="font-size:.62rem;color:var(--cyan);margin-bottom:10px">'+phaseLabel(phase)+'</div>':'')+
+    '</div>'+
+    '<div class="phase-check-grid">'+
+      phaseBox('Compilation',pr.compile===undefined?null:pr.compile)+
+      phaseBox('Unit Tests',pr.unit_tests===undefined?null:pr.unit_tests)+
+      phaseBox('Integration Tests',pr.integration_tests===undefined?null:pr.integration_tests)+
+    '</div>';
+
+  if(rights.length){
+    html+='<div style="margin-top:14px"><div class="summary-title" style="color:var(--lime)">✅ What Went Right</div>'+
+      rights.map(function(r){return '<div class="check-row"><span class="check-icon" style="color:var(--lime)">✓</span>'+r+'</div>';}).join('')+
+    '</div>';
+  }
+  if(wrongs.length){
+    html+='<div style="margin-top:10px"><div class="summary-title" style="color:var(--red)">❌ What Went Wrong</div>'+
+      wrongs.map(function(w){return '<div class="check-row"><span class="check-icon" style="color:var(--red)">✗</span>'+w+'</div>';}).join('')+
+    '</div>';
+  }
+  if(!rights.length&&!wrongs.length&&!phase){
+    html+='<div style="color:var(--dim);font-size:.65rem;margin-top:10px">Waiting for task to start…</div>';
+  }
+
+  document.getElementById('tab-pane-summary').innerHTML=html;
+}
+
+async function fetchAndRenderCode(){
+  var hb=STATE.heartbeat;
+  if(!hb)return;
+  var gen=hb.active_gen;
+  // Show code for last completed task (most recently in progress.results) or active task
+  var progress=STATE.genProgress[gen]||{};
+  var completed=Object.keys(progress.results||{});
+  var tid=completed.length?completed[completed.length-1]:(hb.active_task_id||'');
+  if(!tid){document.getElementById('tab-pane-code').innerHTML='<div style="color:var(--dim);font-size:.65rem">No completed tasks yet.</div>';return;}
+
+  // Use cache if same task
+  if(STATE.lastCode&&STATE.lastCode.gen===gen&&STATE.lastCode.task_id===tid){
+    _renderCodePane(STATE.lastCode);return;
+  }
+  document.getElementById('tab-pane-code').innerHTML='<div style="color:var(--dim);font-size:.65rem">Loading…</div>';
+  var result=await loadJSON('generations/gen_'+gen+'/results/'+tid+'_result.json');
+  if(result){
+    STATE.lastCode={gen:gen,task_id:tid,final_code:result.final_code||'',
+      stdout:result.stdout||'',stderr:result.stderr||'',
+      error_type:result.error_type||'',phase_results:result.phase_results||{}};
+    _renderCodePane(STATE.lastCode);
+  } else {
+    document.getElementById('tab-pane-code').innerHTML='<div style="color:var(--dim);font-size:.65rem">Result file not available yet.</div>';
+  }
+}
+
+function _renderCodePane(data){
+  var desc=(STATE.genProgress[data.gen]&&STATE.genProgress[data.gen].descriptions&&STATE.genProgress[data.gen].descriptions[data.task_id])||data.task_id;
+  var code=data.final_code||'';
+  var escaped=code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  var html='<div style="font-size:.6rem;color:var(--dim);margin-bottom:8px">Last completed: <span style="color:var(--cyan)">'+desc+'</span></div>'+
+    '<div class="code-wrap">'+
+      '<button class="code-copy-btn" onclick="copyCode(this)">Copy</button>'+
+      '<pre>'+escaped+'</pre>'+
+    '</div>';
+  if(data.stderr){
+    var errEsc=data.stderr.slice(0,600).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    html+='<div style="margin-top:12px"><div class="summary-title" style="color:var(--red)">Stderr</div>'+
+      '<div class="code-wrap" style="max-height:160px"><pre style="color:#fc8181">'+errEsc+'</pre></div></div>';
+  }
+  document.getElementById('tab-pane-code').innerHTML=html;
+}
+
+function copyCode(btn){
+  var pre=btn.nextElementSibling;
+  if(navigator.clipboard){navigator.clipboard.writeText(pre.textContent);}
+  btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy';},1500);
+}
+
+/* ══ TOPOLOGY ══ */
+function renderTopology(){
+  var hb=STATE.heartbeat;
+  var card=document.getElementById('topology-card');
+  if(!hb||!hb.topology||!Object.keys(hb.topology).length){card.style.display='none';return;}
+  card.style.display='block';
+  document.getElementById('topo-gen-num').textContent=hb.active_gen;
+  var t=hb.topology;
+
+  var always=[
+    {label:'Analyst',icon:'🔍'},
+    {label:'Architect',icon:'🏗️'},
+    {label:'Coder',icon:'💻'},
+    {label:'Executor',icon:'▶'}
+  ];
+  var optional=[
+    {label:'Test Writer',key:'enable_test_writer',icon:'🧪'},
+    {label:'Critic',key:'enable_critic',icon:'🔍'},
+    {label:'Reviser',key:'enable_reviser',icon:'✏️'},
+    {label:'Debugger',key:'enable_debugger',icon:'🔧'}
+  ];
+
+  var alwaysHtml=always.map(function(a){
+    return '<div class="topo-agent always">'+a.icon+' '+a.label+' <span style="font-size:.55rem;opacity:.7">always on</span></div>';
+  }).join('');
+
+  var optHtml=optional.map(function(a){
+    var on=t[a.key]===true||t[a.key]==='true';
+    return '<div class="topo-agent '+(on?'on':'off')+'">'+a.icon+' '+a.label+
+      ' <span style="font-size:.55rem">'+(on?'ON':'OFF')+'</span></div>';
+  }).join('');
+
+  var extra='';
+  if(t.max_critic_reviser_cycles!=null)
+    extra+='<span style="font-size:.6rem;color:var(--dim);margin-left:4px">Critic/Reviser cycles: '+t.max_critic_reviser_cycles+'</span>';
+  if(t.max_debug_cycles!=null)
+    extra+='<span style="font-size:.6rem;color:var(--dim);margin-left:12px">Debug cycles: '+t.max_debug_cycles+'</span>';
+
+  document.getElementById('topology-content').innerHTML=
+    '<div style="font-size:.58rem;color:var(--dim);margin-bottom:6px">Core pipeline (always active)</div>'+
+    '<div class="topo-grid">'+alwaysHtml+'</div>'+
+    '<div style="font-size:.58rem;color:var(--dim);margin-top:12px;margin-bottom:6px">Optional agents (evolution-controlled)</div>'+
+    '<div class="topo-grid">'+optHtml+'</div>'+
+    (extra?'<div style="margin-top:10px">'+extra+'</div>':'');
 }
 
 /* ══ HERO CARD ══ */

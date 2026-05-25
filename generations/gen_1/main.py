@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 _GEN_DIR = Path(__file__).resolve().parent
 _PROJECT_ROOT = _GEN_DIR.parent.parent if _GEN_DIR.parent.name == "generations" else _GEN_DIR.parent
 _HEARTBEAT_PATH = _PROJECT_ROOT / "data" / "heartbeat.json"
+_GEN_TOPOLOGY: dict = {}  # set once in run_generation, included in every heartbeat write
 
 
 def _write_progress(gen_num: int, task_ids: list, completed: dict, descriptions: dict = None) -> None:
@@ -84,6 +85,7 @@ def _write_heartbeat(
             "active_agents": active_agents or [],
             "current_phase": current_phase,
             "phase_results": phase_results or {},
+            "topology": _GEN_TOPOLOGY,
             "last_updated": _dt.datetime.now(_dt.timezone.utc).isoformat(),
         }))
     except Exception:
@@ -107,6 +109,9 @@ def run_generation(gen_config: Config, generation_number: int):
     Orchestrates the entire evolutionary loop for a single generation.
     Uses the multi-agent specialization pipeline for each task.
     """
+    global _GEN_TOPOLOGY
+    _GEN_TOPOLOGY = gen_config.topology.to_dict() if hasattr(gen_config.topology, "to_dict") else {}
+
     current_gen_dir = get_current_generation_dir(generation_number)
     results_dir = current_gen_dir / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
