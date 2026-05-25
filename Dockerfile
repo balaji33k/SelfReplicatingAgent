@@ -20,4 +20,4 @@ EXPOSE 7860
 
 USER user
 
-CMD ["python", "serve_railway.py"]
+CMD ["python", "serve.py"]
