@@ -193,24 +193,31 @@
     @keyframes dotPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.6);opacity:.6}}
 
     /* ── Topology node diagram ── */
-    .pipeline-flow{display:flex;align-items:center;overflow-x:auto;padding:6px 0;gap:0}
-    .pipe-node{display:flex;flex-direction:column;align-items:center;gap:4px;
-      padding:10px 12px;border-radius:12px;border:1px solid var(--border);
-      background:var(--card);min-width:68px;text-align:center;transition:.3s;flex-shrink:0}
-    .pipe-node.pn-always{border-color:rgba(0,243,255,.3);background:rgba(0,243,255,.06)}
-    .pipe-node.pn-on{border-color:rgba(57,255,20,.3);background:rgba(57,255,20,.05)}
-    .pipe-node.pn-off{opacity:.22;filter:grayscale(1)}
-    .pipe-node.pn-active{border-color:var(--cyan)!important;background:rgba(0,243,255,.15)!important;
-      box-shadow:0 0 18px rgba(0,243,255,.35);animation:nodeGlow 1.4s infinite}
-    .pipe-node-icon{font-size:1.1rem;line-height:1}
-    .pipe-node-label{font-size:.56rem;font-weight:700;color:var(--fg)}
-    .pipe-node-state{font-size:.48rem;margin-top:1px}
-    .pipe-arrow{color:rgba(255,255,255,.2);font-size:.9rem;padding:0 3px;flex-shrink:0}
-    .pipe-arrow.pa-done{color:var(--lime)}
-    .pipe-cycle-wrap{display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0}
-    .pipe-cycle-line{font-size:.48rem;color:var(--amber);white-space:nowrap}
-    @keyframes nodeGlow{0%,100%{box-shadow:0 0 18px rgba(0,243,255,.35)}
-      50%{box-shadow:0 0 30px rgba(0,243,255,.65)}}
+    .pipeline-flow{display:flex;align-items:center;overflow-x:auto;padding:10px 0;gap:0;flex-wrap:nowrap}
+    .pipe-node{display:flex;flex-direction:column;align-items:center;gap:5px;
+      padding:14px 10px 10px;border-radius:14px;border:2px solid var(--border);
+      background:#0d0d18;min-width:80px;text-align:center;transition:.3s;flex-shrink:0;position:relative}
+    .pipe-node.pn-always{border-color:rgba(0,243,255,.4);background:rgba(0,243,255,.05)}
+    .pipe-node.pn-on{border-color:rgba(57,255,20,.4);background:rgba(57,255,20,.04)}
+    .pipe-node.pn-off{opacity:.18;filter:grayscale(1)}
+    .pipe-node.pn-active{border-color:var(--cyan)!important;background:rgba(0,243,255,.12)!important;
+      box-shadow:0 0 24px rgba(0,243,255,.5);animation:nodeGlow 1.4s infinite}
+    .pipe-node-icon{font-size:1.5rem;line-height:1}
+    .pipe-node-label{font-size:.6rem;font-weight:800;color:var(--fg);letter-spacing:.02em}
+    .pipe-node-badge{font-size:.48rem;font-weight:700;padding:1px 6px;border-radius:4px;margin-top:2px}
+    .pnb-core{background:rgba(0,243,255,.15);color:var(--cyan)}
+    .pnb-on{background:rgba(57,255,20,.15);color:var(--lime)}
+    .pnb-off{background:rgba(255,255,255,.06);color:var(--dim)}
+    .pipe-conn{display:flex;flex-direction:column;align-items:center;justify-content:center;
+      flex-shrink:0;padding:0 2px;gap:1px}
+    .pipe-conn-line{height:2px;width:24px;background:rgba(255,255,255,.12);border-radius:2px}
+    .pipe-conn-line.pc-active{background:var(--cyan);box-shadow:0 0 6px var(--cyan)}
+    .pipe-conn-arrow{font-size:.7rem;color:rgba(255,255,255,.2);margin-top:-2px}
+    .pipe-conn-arrow.pc-active{color:var(--cyan)}
+    .pipe-cycle-badge{position:absolute;top:-10px;left:50%;transform:translateX(-50%);
+      font-size:.46rem;background:var(--amber);color:#000;padding:1px 5px;border-radius:4px;white-space:nowrap;font-weight:700}
+    @keyframes nodeGlow{0%,100%{box-shadow:0 0 24px rgba(0,243,255,.5)}
+      50%{box-shadow:0 0 40px rgba(0,243,255,.85)}}
 
     /* ── Sidebar task list ── */
     .sb-task-list{display:flex;flex-direction:column;gap:1px;margin-top:8px;
@@ -482,6 +489,12 @@
       </div>
     </div>
 
+    <!-- TOPOLOGY — inline below hero -->
+    <div class="card" id="topology-card" style="display:none">
+      <div class="card-title">🔧 Pipeline Topology — Generation <span id="topo-gen-num">1</span></div>
+      <div id="topology-content"></div>
+    </div>
+
     <!-- TASK SUMMARY + CODE TABS -->
     <div class="card" id="task-tabs-card" style="display:none">
       <div class="tab-bar">
@@ -490,12 +503,6 @@
       </div>
       <div id="tab-pane-summary"></div>
       <div id="tab-pane-code" style="display:none"></div>
-    </div>
-
-    <!-- TOPOLOGY -->
-    <div class="card" id="topology-card" style="display:none">
-      <div class="card-title">🔧 Pipeline Topology — Generation <span id="topo-gen-num">1</span></div>
-      <div id="topology-content"></div>
     </div>
 
     <!-- TIMELINE -->
@@ -754,36 +761,38 @@ function renderTopology(){
   nodes.forEach(function(n,i){
     var on=n.always||(t[n.key]===true||t[n.key]==='true');
     var isActive=n.id===activeAgent&&hb.status==='RUNNING';
-    var cls='pipe-node '+(isActive?'pn-active ':'')+( n.always?'pn-always':(on?'pn-on':'pn-off'));
-    var stateTxt=n.always
-      ?'<span class="pipe-node-state" style="color:rgba(0,243,255,.6)">core</span>'
-      :(on?'<span class="pipe-node-state" style="color:var(--lime)">ON</span>'
-          :'<span class="pipe-node-state" style="color:var(--dim)">OFF</span>');
+    var nodeCls='pipe-node '+(isActive?'pn-active ':'')+( n.always?'pn-always':(on?'pn-on':'pn-off'));
+    var badgeCls=n.always?'pnb-core':(on?'pnb-on':'pnb-off');
+    var badgeTxt=n.always?'core':(on?'ON':'OFF');
 
-    // Critic ⇄ Reviser get a cycle annotation
-    var cycleNote='';
-    if(n.id==='critic'&&(t['enable_critic']===true||t['enable_critic']==='true')
-                      &&(t['enable_reviser']===true||t['enable_reviser']==='true')){
-      cycleNote='<div class="pipe-cycle-line">⟳ '+(t.max_critic_reviser_cycles||'?')+' cycles</div>';
+    // Cycle badge for Critic (shows ⟳N between Critic and Reviser)
+    var cycleBadge='';
+    if(n.id==='critic'&&on&&(t['enable_reviser']===true||t['enable_reviser']==='true')){
+      cycleBadge='<div class="pipe-cycle-badge">⟳ '+(t.max_critic_reviser_cycles||'N')+' cycles</div>';
     }
 
-    parts.push('<div class="'+cls+'">'+
-      '<div class="pipe-node-icon">'+n.icon+'</div>'+
-      '<div class="pipe-node-label">'+n.label+'</div>'+
-      stateTxt+
-      (cycleNote?cycleNote:'')+
-    '</div>');
+    parts.push(
+      '<div class="'+nodeCls+'">'+
+        cycleBadge+
+        '<div class="pipe-node-icon">'+n.icon+'</div>'+
+        '<div class="pipe-node-label">'+n.label+'</div>'+
+        '<span class="pipe-node-badge '+badgeCls+'">'+badgeTxt+'</span>'+
+      '</div>'
+    );
 
     if(i<nodes.length-1){
-      var arrowCls='pipe-arrow';
-      parts.push('<div class="'+arrowCls+'">→</div>');
+      var connActive=isActive||(nodes[i+1].id===activeAgent&&hb.status==='RUNNING');
+      parts.push(
+        '<div class="pipe-conn">'+
+          '<div class="pipe-conn-line'+(connActive?' pc-active':'')+'"></div>'+
+          '<div class="pipe-conn-arrow'+(connActive?' pc-active':'')+'">▶</div>'+
+        '</div>'
+      );
     }
   });
 
-  // Debug cycle note
-  var dbgNote='';
-  if(t.max_debug_cycles!=null)
-    dbgNote='<div style="font-size:.56rem;color:var(--dim);margin-top:10px">Debugger retries: '+t.max_debug_cycles+' cycles</div>';
+  var dbgNote=t.max_debug_cycles!=null
+    ?'<div style="font-size:.56rem;color:var(--dim);margin-top:8px;padding-left:4px">Debug retry cycles: '+t.max_debug_cycles+'</div>':'' ;
 
   document.getElementById('topology-content').innerHTML=
     '<div class="pipeline-flow">'+parts.join('')+'</div>'+dbgNote;
