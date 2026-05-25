@@ -173,13 +173,44 @@
       border:1px solid rgba(0,243,255,.3);color:var(--cyan);font-size:.58rem;padding:3px 8px;
       border-radius:6px;cursor:pointer}
     .code-copy-btn:hover{background:rgba(0,243,255,.25)}
-    /* ── Topology ── */
-    .topo-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
-    .topo-agent{padding:8px 14px;border-radius:10px;border:1px solid var(--border);
-      font-size:.62rem;font-weight:700;display:flex;align-items:center;gap:6px}
-    .topo-agent.on{border-color:rgba(57,255,20,.4);background:rgba(57,255,20,.07);color:var(--lime)}
-    .topo-agent.off{opacity:.35;color:var(--dim)}
-    .topo-agent.always{border-color:rgba(0,243,255,.35);background:rgba(0,243,255,.07);color:var(--cyan)}
+    /* ── Task phase progress bar ── */
+    .phase-bar-wrap{margin-top:14px}
+    .phase-bar-label{font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+    .phase-steps{display:flex;align-items:flex-start;gap:0;overflow-x:auto}
+    .phase-step{flex:1;min-width:52px;text-align:center;padding:6px 2px 4px;
+      border-top:2px solid rgba(255,255,255,.08);cursor:default;transition:.3s}
+    .phase-step.ps-done{border-top-color:var(--lime)}
+    .phase-step.ps-active{border-top-color:var(--cyan)}
+    .phase-step.ps-skip{opacity:.2}
+    .phase-step-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.12);
+      margin:0 auto 4px;transition:.3s}
+    .phase-step.ps-done .phase-step-dot{background:var(--lime)}
+    .phase-step.ps-active .phase-step-dot{background:var(--cyan);box-shadow:0 0 8px var(--cyan);
+      animation:dotPulse 1.2s infinite}
+    .phase-step-txt{font-size:.48rem;color:var(--dim);line-height:1.3;transition:.3s}
+    .phase-step.ps-done .phase-step-txt{color:var(--lime)}
+    .phase-step.ps-active .phase-step-txt{color:var(--cyan);font-weight:700}
+    @keyframes dotPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.6);opacity:.6}}
+
+    /* ── Topology node diagram ── */
+    .pipeline-flow{display:flex;align-items:center;overflow-x:auto;padding:6px 0;gap:0}
+    .pipe-node{display:flex;flex-direction:column;align-items:center;gap:4px;
+      padding:10px 12px;border-radius:12px;border:1px solid var(--border);
+      background:var(--card);min-width:68px;text-align:center;transition:.3s;flex-shrink:0}
+    .pipe-node.pn-always{border-color:rgba(0,243,255,.3);background:rgba(0,243,255,.06)}
+    .pipe-node.pn-on{border-color:rgba(57,255,20,.3);background:rgba(57,255,20,.05)}
+    .pipe-node.pn-off{opacity:.22;filter:grayscale(1)}
+    .pipe-node.pn-active{border-color:var(--cyan)!important;background:rgba(0,243,255,.15)!important;
+      box-shadow:0 0 18px rgba(0,243,255,.35);animation:nodeGlow 1.4s infinite}
+    .pipe-node-icon{font-size:1.1rem;line-height:1}
+    .pipe-node-label{font-size:.56rem;font-weight:700;color:var(--fg)}
+    .pipe-node-state{font-size:.48rem;margin-top:1px}
+    .pipe-arrow{color:rgba(255,255,255,.2);font-size:.9rem;padding:0 3px;flex-shrink:0}
+    .pipe-arrow.pa-done{color:var(--lime)}
+    .pipe-cycle-wrap{display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0}
+    .pipe-cycle-line{font-size:.48rem;color:var(--amber);white-space:nowrap}
+    @keyframes nodeGlow{0%,100%{box-shadow:0 0 18px rgba(0,243,255,.35)}
+      50%{box-shadow:0 0 30px rgba(0,243,255,.65)}}
 
     /* ── Sidebar task list ── */
     .sb-task-list{display:flex;flex-direction:column;gap:1px;margin-top:8px;
@@ -389,10 +420,10 @@
         </div>
       </div>
 
-      <!-- Big progress bar -->
+      <!-- Generation progress bar -->
       <div class="progress-section">
         <div class="progress-meta">
-          <div class="progress-label">Tasks Completed</div>
+          <div class="progress-label">Generation Progress</div>
           <div>
             <span class="progress-count" id="pbar-done">0</span>
             <span class="progress-total" id="pbar-total"> / 0</span>
@@ -401,7 +432,6 @@
         <div class="big-bar-track">
           <div class="big-bar-fill" id="big-bar-fill" style="width:0%"></div>
         </div>
-        <!-- Segmented pass/fail bar -->
         <div class="seg-bars" id="seg-bars">
           <div class="seg-pend" style="flex:1"></div>
         </div>
@@ -410,6 +440,12 @@
           <span class="seg-label" style="color:var(--red)" id="seg-fail-label">0 failed</span>
           <span class="seg-label" id="seg-pend-label">0 pending</span>
         </div>
+      </div>
+
+      <!-- Task phase progress bar -->
+      <div class="phase-bar-wrap" id="phase-bar-wrap" style="display:none">
+        <div class="phase-bar-label">Current Task — <span id="phase-task-id" style="color:var(--cyan)"></span></div>
+        <div class="phase-steps" id="phase-steps"></div>
       </div>
 
       <!-- Live ticker -->
@@ -655,7 +691,44 @@ function copyCode(btn){
   btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy';},1500);
 }
 
-/* ══ TOPOLOGY ══ */
+/* ══ PHASE STEPS (task-level progress bar) ══ */
+var PHASE_ORDER=[
+  {phase:'thinking',      label:'Think',     agent:'analyst'},
+  {phase:'writing_unit_tests',label:'Write Tests',agent:'test_writer'},
+  {phase:'writing_code',  label:'Code',      agent:'coder'},
+  {phase:'reviewing',     label:'Review',    agent:'critic'},
+  {phase:'revising',      label:'Revise',    agent:'reviser'},
+  {phase:'compiling',     label:'Compile',   agent:'executor'},
+  {phase:'running_unit_tests',label:'Run Tests',agent:'executor'},
+  {phase:'debugging',     label:'Debug',     agent:'debugger'},
+  {phase:'running_integration_tests',label:'Integ.',agent:'executor'}
+];
+var PHASE_TO_IDX={};
+PHASE_ORDER.forEach(function(p,i){PHASE_TO_IDX[p.phase]=i;});
+
+function renderPhaseSteps(currentPhase,topo){
+  var activeIdx=PHASE_TO_IDX[currentPhase];
+  if(activeIdx===undefined)activeIdx=-1;
+  return PHASE_ORDER.map(function(p,i){
+    // Hide disabled optional agents
+    var agentKey='enable_'+p.agent;
+    var optional=(p.agent==='test_writer'||p.agent==='critic'||p.agent==='reviser'||p.agent==='debugger');
+    var enabled=!optional||(topo[agentKey]===true||topo[agentKey]==='true');
+    var cls=!enabled?'ps-skip':i<activeIdx?'ps-done':i===activeIdx?'ps-active':'';
+    return '<div class="phase-step '+cls+'">'+
+      '<div class="phase-step-dot"></div>'+
+      '<div class="phase-step-txt">'+p.label+'</div>'+
+    '</div>';
+  }).join('');
+}
+
+/* ══ TOPOLOGY — node diagram ══ */
+var PHASE_TO_AGENT={
+  'thinking':'analyst','writing_unit_tests':'test_writer','writing_code':'coder',
+  'reviewing':'critic','revising':'reviser','compiling':'executor',
+  'running_unit_tests':'executor','debugging':'debugger','running_integration_tests':'executor'
+};
+
 function renderTopology(){
   var hb=STATE.heartbeat;
   var card=document.getElementById('topology-card');
@@ -663,42 +736,57 @@ function renderTopology(){
   card.style.display='block';
   document.getElementById('topo-gen-num').textContent=hb.active_gen;
   var t=hb.topology;
+  var activeAgent=PHASE_TO_AGENT[hb.current_phase]||'';
 
-  var always=[
-    {label:'Analyst',icon:'🔍'},
-    {label:'Architect',icon:'🏗️'},
-    {label:'Coder',icon:'💻'},
-    {label:'Executor',icon:'▶'}
+  // Pipeline node definitions in flow order
+  var nodes=[
+    {id:'analyst',    label:'Analyst',     icon:'🧠', always:true},
+    {id:'architect',  label:'Architect',   icon:'🏗️', always:true},
+    {id:'test_writer',label:'Test Writer', icon:'🧪', key:'enable_test_writer'},
+    {id:'coder',      label:'Coder',       icon:'💻', always:true},
+    {id:'critic',     label:'Critic',      icon:'🔍', key:'enable_critic'},
+    {id:'reviser',    label:'Reviser',     icon:'✏️', key:'enable_reviser'},
+    {id:'executor',   label:'Executor',    icon:'▶️', always:true},
+    {id:'debugger',   label:'Debugger',    icon:'🔧', key:'enable_debugger'},
   ];
-  var optional=[
-    {label:'Test Writer',key:'enable_test_writer',icon:'🧪'},
-    {label:'Critic',key:'enable_critic',icon:'🔍'},
-    {label:'Reviser',key:'enable_reviser',icon:'✏️'},
-    {label:'Debugger',key:'enable_debugger',icon:'🔧'}
-  ];
 
-  var alwaysHtml=always.map(function(a){
-    return '<div class="topo-agent always">'+a.icon+' '+a.label+' <span style="font-size:.55rem;opacity:.7">always on</span></div>';
-  }).join('');
+  var parts=[];
+  nodes.forEach(function(n,i){
+    var on=n.always||(t[n.key]===true||t[n.key]==='true');
+    var isActive=n.id===activeAgent&&hb.status==='RUNNING';
+    var cls='pipe-node '+(isActive?'pn-active ':'')+( n.always?'pn-always':(on?'pn-on':'pn-off'));
+    var stateTxt=n.always
+      ?'<span class="pipe-node-state" style="color:rgba(0,243,255,.6)">core</span>'
+      :(on?'<span class="pipe-node-state" style="color:var(--lime)">ON</span>'
+          :'<span class="pipe-node-state" style="color:var(--dim)">OFF</span>');
 
-  var optHtml=optional.map(function(a){
-    var on=t[a.key]===true||t[a.key]==='true';
-    return '<div class="topo-agent '+(on?'on':'off')+'">'+a.icon+' '+a.label+
-      ' <span style="font-size:.55rem">'+(on?'ON':'OFF')+'</span></div>';
-  }).join('');
+    // Critic ⇄ Reviser get a cycle annotation
+    var cycleNote='';
+    if(n.id==='critic'&&(t['enable_critic']===true||t['enable_critic']==='true')
+                      &&(t['enable_reviser']===true||t['enable_reviser']==='true')){
+      cycleNote='<div class="pipe-cycle-line">⟳ '+(t.max_critic_reviser_cycles||'?')+' cycles</div>';
+    }
 
-  var extra='';
-  if(t.max_critic_reviser_cycles!=null)
-    extra+='<span style="font-size:.6rem;color:var(--dim);margin-left:4px">Critic/Reviser cycles: '+t.max_critic_reviser_cycles+'</span>';
+    parts.push('<div class="'+cls+'">'+
+      '<div class="pipe-node-icon">'+n.icon+'</div>'+
+      '<div class="pipe-node-label">'+n.label+'</div>'+
+      stateTxt+
+      (cycleNote?cycleNote:'')+
+    '</div>');
+
+    if(i<nodes.length-1){
+      var arrowCls='pipe-arrow';
+      parts.push('<div class="'+arrowCls+'">→</div>');
+    }
+  });
+
+  // Debug cycle note
+  var dbgNote='';
   if(t.max_debug_cycles!=null)
-    extra+='<span style="font-size:.6rem;color:var(--dim);margin-left:12px">Debug cycles: '+t.max_debug_cycles+'</span>';
+    dbgNote='<div style="font-size:.56rem;color:var(--dim);margin-top:10px">Debugger retries: '+t.max_debug_cycles+' cycles</div>';
 
   document.getElementById('topology-content').innerHTML=
-    '<div style="font-size:.58rem;color:var(--dim);margin-bottom:6px">Core pipeline (always active)</div>'+
-    '<div class="topo-grid">'+alwaysHtml+'</div>'+
-    '<div style="font-size:.58rem;color:var(--dim);margin-top:12px;margin-bottom:6px">Optional agents (evolution-controlled)</div>'+
-    '<div class="topo-grid">'+optHtml+'</div>'+
-    (extra?'<div style="margin-top:10px">'+extra+'</div>':'');
+    '<div class="pipeline-flow">'+parts.join('')+'</div>'+dbgNote;
 }
 
 /* ══ HERO CARD ══ */
@@ -808,6 +896,20 @@ function renderHero(){
     actBadges.innerHTML=renderPhaseBadges(hb.phase_results||{});
   } else {
     actWrap.style.display='none';
+  }
+
+  // Task phase progress bar
+  var phaseBarWrap=document.getElementById('phase-bar-wrap');
+  var phaseTaskId=document.getElementById('phase-task-id');
+  var phaseSteps=document.getElementById('phase-steps');
+  if(hb.status==='RUNNING'&&hb.active_task_id){
+    phaseBarWrap.style.display='block';
+    var progress2=STATE.genProgress[hb.active_gen]||{};
+    var descs2=progress2.descriptions||{};
+    phaseTaskId.textContent=descs2[hb.active_task_id]||hb.active_task_id;
+    phaseSteps.innerHTML=renderPhaseSteps(hb.current_phase,hb.topology||{});
+  } else {
+    phaseBarWrap.style.display='none';
   }
 
 }
