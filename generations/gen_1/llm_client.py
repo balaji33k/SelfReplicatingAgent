@@ -48,15 +48,18 @@ _MODEL_LIMITS: Dict[str, Dict[str, int]] = {
 }
 _DEFAULT_LIMITS = {"tpd": 500_000, "tpm": 30_000}
 
-# Ordered fallback chain — when primary hits TPD, switch to next model.
-# Each model has its own independent TPD budget at Groq free tier.
-# NOTE: llama-4-maverick is excluded — not available on free tier (returns 404).
+# Ordered fallback chain — when primary hits TPD/unavailable, switch to next.
+# Each model has its own independent daily token budget at Groq.
+# EXCLUDED models (confirmed unavailable as of 2026):
+#   - llama-4-maverick: 404 (not on free tier)
+#   - gemma2-9b-it: 400 model_decommissioned
+#   - mixtral-8x7b-32768: 400 model_decommissioned
 _FALLBACK_ORDER = [
-    "meta-llama/llama-4-scout-17b-16e-instruct",   # primary (30k TPM / 500k TPD)
+    "meta-llama/llama-4-scout-17b-16e-instruct",   # primary  (30k TPM / 500k TPD)
     "llama-3.1-8b-instant",                          # fallback 1 (20k TPM / 500k TPD)
-    "gemma2-9b-it",                                   # fallback 2 (15k TPM / 500k TPD)
-    "mixtral-8x7b-32768",                             # fallback 3 (18k TPM / 500k TPD)
-    "llama-3.3-70b-versatile",                        # fallback 4 (12k TPM / 100k TPD)
+    "llama-3.3-70b-versatile",                        # fallback 2 (12k TPM / 100k TPD)
+    "llama3-70b-8192",                                # fallback 3 (older llama3)
+    "llama3-8b-8192",                                 # fallback 4 (older llama3 small)
 ]
 
 # Max wait time (seconds) for a TPM rate-limit sleep.
@@ -176,8 +179,14 @@ class LLMClient:
                 err_str = str(exc)
                 is_rate_limit = ("429" in err_str or "rate_limit_exceeded" in err_str
                                  or "RateLimitError" in type(exc).__name__)
-                is_not_found = ("404" in err_str or "model_not_found" in err_str
-                                or "does not exist" in err_str)
+                is_not_found = (
+                    "404" in err_str
+                    or "model_not_found" in err_str
+                    or "does not exist" in err_str
+                    or "model_decommissioned" in err_str
+                    or "decommissioned" in err_str.lower()
+                    or "no longer supported" in err_str.lower()
+                )
 
                 if is_rate_limit:
                     retry_sec = self._parse_retry_seconds(err_str)
