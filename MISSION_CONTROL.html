@@ -819,7 +819,6 @@ function renderGenDetail(gen){
       '<div class="stat"><div class="stat-val" style="color:var(--red)">'+failed+'</div><div class="stat-label">Failed</div></div>'+
       '<div class="stat"><div class="stat-val" style="font-size:.9rem;padding-top:8px">'+dHtml+'</div><div class="stat-label">vs Parent</div></div>'+
       '</div>'+
-      renderTaskRows(gen,progress,e,activeTid)+
       '</div>';
   } else if(live){
     // Generation running — show live stats + task list
@@ -835,13 +834,7 @@ function renderGenDetail(gen){
       '<div class="stat"><div class="stat-val" style="font-size:.95rem;color:var(--amber)">'+hb.progress+'</div><div class="stat-label">Progress</div></div>'+
       '</div>'+
       '<div class="big-bar-track" style="margin-bottom:4px"><div class="big-bar-fill" style="width:'+barW2+'"></div></div>'+
-      (hb.current_phase?'<div style="font-size:.6rem;color:var(--cyan);margin-bottom:4px">'+phaseLabel(hb.current_phase)+'</div>':'')+
-      renderTaskRows(gen,progress,null,activeTid)+
-      '</div>';
-  } else if(progress&&progress.task_list&&progress.task_list.length){
-    // Have progress data but not yet tracked in evolution log — show task list only
-    html+='<div class="card"><div class="card-title">Generation '+gen+'</div>'+
-      renderTaskRows(gen,progress,null,'')+
+      (hb.current_phase?'<div style="font-size:.6rem;color:var(--cyan);margin-top:6px">'+phaseLabel(hb.current_phase)+'</div>':'')+
       '</div>';
   }
 
