@@ -277,6 +277,14 @@
     <div style="height:1px;background:var(--border);margin:4px 0"></div>
     <h2>Generations</h2>
     <div id="gen-nav" style="display:flex;flex-direction:column;gap:8px"></div>
+    <div style="height:1px;background:var(--border);margin:8px 0"></div>
+    <a href="/code" target="_blank" style="display:flex;align-items:center;gap:8px;padding:9px 12px;
+      border-radius:10px;border:1px solid rgba(0,243,255,.2);background:rgba(0,243,255,.05);
+      color:var(--cyan);text-decoration:none;font-size:.65rem;font-weight:700;transition:.2s"
+      onmouseover="this.style.background='rgba(0,243,255,.12)'"
+      onmouseout="this.style.background='rgba(0,243,255,.05)'">
+      <span>📂</span><span>Code Browser</span>
+    </a>
   </aside>
 
   <!-- ═══ MAIN ═══ -->
@@ -741,18 +749,61 @@ function renderEvoEntry(e){
 
 function openDrawer(row,gen){
   var pass=row.status==='pass';
-  document.getElementById('drawer-content').innerHTML=
+  var dc=document.getElementById('drawer-content');
+
+  // Base info immediately
+  dc.innerHTML=
     '<div style="font-size:1rem;font-weight:800;margin-bottom:4px">'+row.task_id+'</div>'+
     '<div style="font-size:.67rem;color:var(--dim);margin-bottom:20px">Generation '+gen+
-    ' · <span class="pill '+(pass?'pass-pill':'fail-pill')+'">'+(pass?'PASS':'FAIL')+'</span></div>'+
-    '<h3 style="font-size:.65rem;color:var(--dim);margin-bottom:6px">AGENTS USED</h3>'+
-    '<p style="font-size:.72rem;margin-bottom:14px">'+((row.agents_used||[]).join(' → ')||'—')+'</p>'+
-    '<h3 style="font-size:.65rem;color:var(--dim);margin-bottom:6px">ERROR</h3>'+
-    '<p style="font-size:.72rem;margin-bottom:14px;color:'+(pass?'var(--lime)':'var(--red)')+'">'+( row.error_type||'None')+'</p>'+
-    '<h3 style="font-size:.65rem;color:var(--dim);margin-bottom:6px">CYCLES</h3>'+
-    '<pre>'+JSON.stringify(row.cycles||{},null,2)+'</pre>';
+    ' · <span class="pill '+(pass?'pass-pill':'fail-pill')+'">'+(pass?'PASS':'FAIL')+'</span>'+
+    ' · <a href="/code" target="_blank" style="color:var(--cyan);font-size:.6rem;text-decoration:none">Browse all gen files ↗</a></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px">'+
+      '<div><div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Agents Used</div>'+
+        '<div style="font-size:.68rem">'+((row.agents_used||[]).join(' → ')||'—')+'</div></div>'+
+      '<div><div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Error</div>'+
+        '<div style="font-size:.68rem;color:'+(pass?'var(--lime)':'var(--red)')+'">'+( row.error_type||'None')+'</div></div>'+
+      '<div><div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Cycles</div>'+
+        '<div style="font-size:.68rem">'+Object.entries(row.cycles||{}).map(function(kv){return kv[0]+': '+kv[1];}).join(', ')+'</div></div>'+
+    '</div>'+
+    '<div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Generated Code</div>'+
+    '<div id="code-loading" style="color:var(--dim);font-size:.65rem;font-family:var(--mono);padding:16px">⟳ Loading code…</div>';
+
   document.getElementById('drawer').classList.add('open');
   document.getElementById('overlay').classList.add('show');
+
+  // Fetch the full result JSON to get final_code
+  var url='generations/gen_'+gen+'/results/'+row.task_id+'_result.json';
+  fetch(url+'?_='+Date.now())
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(data){
+      var codeEl=document.getElementById('code-loading');
+      if(!codeEl)return;
+      if(!data||!data.final_code){
+        codeEl.textContent='No code found for this task.';
+        return;
+      }
+      var escaped=data.final_code
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      codeEl.innerHTML=
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
+          '<span style="font-size:.55rem;color:var(--dim)">python</span>'+
+          '<button onclick="copyCode(this)" data-code="'+data.final_code.replace(/"/g,'&quot;')+'" '+
+            'style="background:rgba(0,243,255,.1);border:1px solid rgba(0,243,255,.3);color:var(--cyan);'+
+            'border-radius:6px;padding:3px 10px;font-size:.55rem;cursor:pointer;font-family:var(--font)">Copy</button>'+
+        '</div>'+
+        '<pre style="margin:0;max-height:400px;overflow-y:auto"><code>'+escaped+'</code></pre>'+
+        (data.stdout?'<div style="margin-top:14px"><div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Stdout</div><pre style="margin:0;color:var(--lime)">'+data.stdout.replace(/</g,'&lt;')+'</pre></div>':'')+
+        (data.stderr&&!pass?'<div style="margin-top:14px"><div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Stderr</div><pre style="margin:0;color:var(--red)">'+data.stderr.replace(/</g,'&lt;').slice(0,600)+'</pre></div>':'');
+    })
+    .catch(function(){
+      var el=document.getElementById('code-loading');
+      if(el)el.textContent='Could not load code (task result file not found).';
+    });
+}
+function copyCode(btn){
+  navigator.clipboard.writeText(btn.dataset.code).then(function(){
+    btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy';},1500);
+  });
 }
 function closeDrawer(){
   document.getElementById('drawer').classList.remove('open');
