@@ -623,7 +623,7 @@ function renderRows(rows,filter,gen){
       return '<tr onclick="openDrawer('+safe+','+gen+')">'+
         '<td>'+r.task_id+'</td>'+
         '<td><span class="pill '+(pass?'pass-pill':'fail-pill')+'">'+(pass?'PASS':'FAIL')+'</span></td>'+
-        '<td style="color:'+(pass?'var(--dim)':'var(--red))'"+'">'+( r.error_type||'—')+'</td>'+
+        '<td style="color:'+(pass?'var(--dim)':'var(--red)')+'">'+( r.error_type||'—')+'</td>'+
         '<td style="color:var(--dim);font-size:.6rem">'+agents+'</td></tr>';
     }).join('');
   return out||'<tr><td colspan="4" style="color:var(--dim);text-align:center;padding:18px">No results yet</td></tr>';
