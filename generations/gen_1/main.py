@@ -43,8 +43,17 @@ def _write_heartbeat(
     failed: int,
     active_task_id: str = "",
     active_agents: list = None,
+    current_phase: str = "",
+    phase_results: dict = None,
 ) -> None:
-    """Write live status to data/heartbeat.json — read by the dashboard."""
+    """Write live status to data/heartbeat.json — read by the dashboard.
+
+    current_phase: one of thinking | writing_unit_tests | writing_code |
+                   reviewing | revising | compiling | running_unit_tests |
+                   debugging | running_integration_tests
+    phase_results: {"compile": bool|None, "unit_tests": bool|None,
+                    "integration_tests": bool|None}
+    """
     try:
         import datetime as _dt
         _HEARTBEAT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -58,6 +67,8 @@ def _write_heartbeat(
             "failed_so_far": failed,
             "pass_rate_so_far": round(passed / done, 3) if done else 0,
             "active_agents": active_agents or [],
+            "current_phase": current_phase,
+            "phase_results": phase_results or {},
             "last_updated": _dt.datetime.now(_dt.timezone.utc).isoformat(),
         }))
     except Exception:
@@ -121,11 +132,28 @@ def run_generation(gen_config: Config, generation_number: int):
         logger.info(f"[{i+1}/{total_tasks}] Processing task: {task.task_id}")
         _write_heartbeat(
             generation_number, "RUNNING", i, total_tasks,
-            passed_count, failed_count, task.task_id, ["analyst", "coder"]
+            passed_count, failed_count, task.task_id, [],
+            current_phase="thinking", phase_results={}
         )
+
+        # Phase callback — fires before each pipeline stage; updates heartbeat live.
+        # Use default-arg capture for i/task_id (loop values) so each closure is
+        # independent. passed_count / failed_count are read by reference so they
+        # reflect the latest counts when the callback fires mid-task.
+        def _make_phase_cb(_i=i, _tid=task.task_id):
+            def _phase_cb(phase: str, ph_results: dict = None):
+                _write_heartbeat(
+                    generation_number, "RUNNING", _i, total_tasks,
+                    passed_count, failed_count, _tid, [],
+                    current_phase=phase, phase_results=ph_results or {}
+                )
+            return _phase_cb
+
+        phase_cb = _make_phase_cb()
+
         try:
             contract = _task_to_contract(task)
-            result = pipeline.solve(contract)
+            result = pipeline.solve(contract, phase_callback=phase_cb)
 
             result_dict = result.to_dict()
             all_execution_results.append(result_dict)

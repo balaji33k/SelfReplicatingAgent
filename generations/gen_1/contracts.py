@@ -149,6 +149,10 @@ class PipelineResult:
     cycles: Dict[str, int] = field(default_factory=dict)      # {"reviser": 1, "debugger": 0}
     agent_failures: Dict[str, str] = field(default_factory=dict)  # {"critic": "missed_logic"}
 
+    # Phase-level outcomes — None=not reached, True=passed, False=failed
+    # Keys: "compile", "unit_tests", "integration_tests"
+    phase_results: Dict[str, Optional[bool]] = field(default_factory=dict)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "task_id": self.task_id,
@@ -161,4 +165,5 @@ class PipelineResult:
             "agents_used": self.agents_used,
             "cycles": self.cycles,
             "agent_failures": self.agent_failures,
+            "phase_results": self.phase_results,
         }

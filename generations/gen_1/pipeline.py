@@ -98,18 +98,34 @@ class AgentPipeline:
 
     # ── Public entry point ────────────────────────────────────────────────────
 
-    def solve(self, task: TaskContract) -> PipelineResult:
+    def solve(self, task: TaskContract, phase_callback=None) -> PipelineResult:
         """
         Run the full pipeline for a single task.
         Returns a PipelineResult with full agent provenance.
+
+        phase_callback(phase_name: str, phase_results: dict) is called before
+        each major stage so the dashboard can show live activity.
+        Phase names: thinking | writing_unit_tests | writing_code | reviewing |
+                     revising | compiling | running_unit_tests |
+                     debugging | running_integration_tests
         """
         agents_used: List[str] = []
         cycles: Dict[str, int] = {"reviser": 0, "debugger": 0}
         agent_failures: Dict[str, str] = {}
+        phase_results: Dict = {}   # compile / unit_tests / integration_tests
         start_time = time.monotonic()
+
+        def _fire(phase: str, ph: dict = None):
+            """Fire phase callback, silently swallowing any errors."""
+            if phase_callback:
+                try:
+                    phase_callback(phase, ph or {})
+                except Exception:
+                    pass
 
         try:
             # ── Stage 1: Analyst ────────────────────────────────────────────────
+            _fire("thinking")
             agents_used.append("analyst")
             analysis: AnalysisSpec = self._agents["analyst"].run(task)
 
@@ -120,6 +136,7 @@ class AgentPipeline:
             # ── Stage 2b: TestWriter (parallel path — from AnalysisSpec ONLY) ──
             extra_tests: Optional[TestSuite] = None
             if "test_writer" in self._agents:
+                _fire("writing_unit_tests")
                 agents_used.append("test_writer")
                 try:
                     extra_tests = self._agents["test_writer"].run(analysis)
@@ -131,13 +148,15 @@ class AgentPipeline:
                     logger.warning(f"[pipeline] TestWriter failed (non-fatal): {e}")
 
             # ── Stage 3: Coder ──────────────────────────────────────────────────
+            _fire("writing_code")
             agents_used.append("coder")
             artifact: CodeArtifact = self._agents["coder"].run(design, analysis)
 
             # ── Stage 4: Critic → Reviser loop ─────────────────────────────────
             if "critic" in self._agents:
+                _fire("reviewing")
                 artifact, cycles["reviser"], reviser_failures = self._critic_reviser_loop(
-                    artifact, analysis
+                    artifact, analysis, _fire
                 )
                 agents_used.append("critic")
                 if cycles["reviser"] > 0:
@@ -150,16 +169,33 @@ class AgentPipeline:
             if extra_tests and extra_tests.extra_tests:
                 all_tests.extend(extra_tests.extra_tests)
 
-            # ── Stage 6: Execute ─────────────────────────────────────────────────
+            # ── Stage 6: Execute (first run — compile + unit tests) ──────────────
+            _fire("compiling")
             agents_used.append("executor")
             execution = self._execute(artifact, all_tests)
 
+            # Classify compile vs logic failures
+            stderr_lower = (execution.stderr or "").lower()
+            compile_ok = (
+                "syntaxerror" not in stderr_lower
+                and "importerror" not in stderr_lower
+                and "modulenotfounderror" not in stderr_lower
+            )
+            phase_results["compile"] = compile_ok
+            unit_ok = execution.success
+            phase_results["unit_tests"] = unit_ok
+            _fire("running_unit_tests", dict(phase_results))
+
             # ── Stage 7: Debugger (on failure) ──────────────────────────────────
             if not execution.success and "debugger" in self._agents:
+                _fire("debugging", dict(phase_results))
                 agents_used.append("debugger")
                 artifact, cycles["debugger"] = self._debug_loop(artifact, execution)
+                _fire("running_integration_tests", dict(phase_results))
                 # Re-execute after debugging
                 execution = self._execute(artifact, all_tests)
+                integ_ok = execution.success
+                phase_results["integration_tests"] = integ_ok
 
             elapsed = time.monotonic() - start_time
             return PipelineResult(
@@ -173,6 +209,7 @@ class AgentPipeline:
                 agents_used=agents_used,
                 cycles=cycles,
                 agent_failures=agent_failures,
+                phase_results=phase_results,
             )
 
         except Exception as e:
@@ -189,16 +226,18 @@ class AgentPipeline:
                 agents_used=agents_used,
                 cycles=cycles,
                 agent_failures=agent_failures,
+                phase_results=phase_results,
             )
 
     # ── Critic → Reviser loop ─────────────────────────────────────────────────
 
     def _critic_reviser_loop(
-        self, artifact: CodeArtifact, analysis: AnalysisSpec
+        self, artifact: CodeArtifact, analysis: AnalysisSpec, fire_fn=None
     ):
         """
         Run Critic, then Reviser up to max_revise_cycles.
         Returns (final_artifact, revision_count, failure_summary).
+        fire_fn: optional callable(phase, phase_results) from the parent solve().
         """
         revisions = 0
         failures = ""
@@ -218,6 +257,12 @@ class AgentPipeline:
             if "reviser" not in self._agents:
                 failures = "critic_failed_no_reviser"
                 break
+
+            if fire_fn:
+                try:
+                    fire_fn("revising", {})
+                except Exception:
+                    pass
 
             revised = self._agents["reviser"].run(artifact, critique, cycle=cycle)
             revisions += 1

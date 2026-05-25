@@ -246,6 +246,52 @@
     /* ── ETA chip ── */
     .eta-chip{background:rgba(255,179,0,.1);border:1px solid rgba(255,179,0,.3);
       border-radius:8px;padding:4px 10px;font-size:.58rem;color:var(--amber);font-family:var(--mono)}
+
+    /* ── Phase strip (live pipeline activity) ── */
+    .phase-strip-wrap{margin-top:14px;background:rgba(0,0,0,.35);border:1px solid var(--border);
+      border-radius:14px;padding:12px 14px 10px}
+    .phase-strip-label{font-size:.5rem;color:var(--dim);text-transform:uppercase;
+      letter-spacing:1.5px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+    .phase-strip{display:flex;align-items:flex-start;overflow-x:auto;scrollbar-width:none;padding:2px 0}
+    .phase-strip::-webkit-scrollbar{display:none}
+    .phase-item{display:flex;flex-direction:column;align-items:center;flex:1;min-width:58px;
+      position:relative;gap:5px;z-index:0}
+    /* connector line between items */
+    .phase-item:not(:last-child)::after{content:'';position:absolute;top:16px;
+      left:calc(50% + 11px);right:calc(-50% + 11px);height:1px;
+      background:rgba(255,255,255,.07);z-index:-1}
+    .phase-icon{font-size:.95rem;line-height:1;z-index:1}
+    .phase-dot{width:14px;height:14px;border-radius:50%;
+      border:1.5px solid rgba(255,255,255,.12);background:transparent;
+      z-index:1;display:flex;align-items:center;justify-content:center;
+      font-size:.55rem;line-height:1;flex-shrink:0}
+    .phase-name{font-size:.44rem;color:var(--dim);text-transform:uppercase;
+      letter-spacing:.4px;text-align:center;line-height:1.3;margin-top:1px}
+    /* active */
+    .phase-active .phase-icon{filter:drop-shadow(0 0 6px var(--cyan))}
+    .phase-active .phase-dot{border-color:var(--cyan);background:rgba(0,243,255,.12);
+      animation:phasePulse 1.1s ease-in-out infinite}
+    .phase-active .phase-name{color:var(--cyan)}
+    @keyframes phasePulse{0%,100%{box-shadow:0 0 0 0 rgba(0,243,255,.5)}
+      55%{box-shadow:0 0 0 5px rgba(0,243,255,0)}}
+    /* pass */
+    .phase-pass .phase-dot{border-color:var(--lime);background:rgba(57,255,20,.15);color:var(--lime)}
+    .phase-pass .phase-name{color:var(--lime)}
+    /* fail */
+    .phase-fail .phase-dot{border-color:var(--red);background:rgba(255,49,49,.15);color:var(--red)}
+    .phase-fail .phase-name{color:var(--red)}
+    /* pending */
+    .phase-pending .phase-icon{opacity:.2}
+    .phase-pending .phase-dot{opacity:.15}
+    .phase-pending .phase-name{opacity:.25}
+    /* result badges */
+    .phase-result-row{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
+    .prb{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:6px;
+      font-size:.53rem;font-weight:700;border:1px solid;text-transform:uppercase;letter-spacing:.5px;
+      font-family:var(--mono)}
+    .prb-pass{color:var(--lime);border-color:rgba(57,255,20,.3);background:rgba(57,255,20,.08)}
+    .prb-fail{color:var(--red);border-color:rgba(255,49,49,.3);background:rgba(255,49,49,.08)}
+    .prb-pend{color:var(--dim);border-color:rgba(255,255,255,.1);background:rgba(255,255,255,.03)}
   </style>
 </head>
 <body>
@@ -327,6 +373,9 @@
         <div class="ticker-dot" id="ticker-dot"></div>
         <div class="ticker-text" id="ticker-text">Waiting for evolution to start…</div>
       </div>
+
+      <!-- Phase strip (live pipeline activity) — shown only when RUNNING -->
+      <div class="phase-strip-wrap" id="phase-strip-wrap" style="display:none"></div>
 
       <!-- Mini stats -->
       <div class="mini-stats">
@@ -489,6 +538,77 @@ function renderHero(){
     tickerText.style.color='var(--dim)';
     tickerText.textContent='Waiting for evolution to start…';
   }
+
+  // Phase strip — only visible while RUNNING and a phase is known
+  var phaseWrap=document.getElementById('phase-strip-wrap');
+  if(hb.status==='RUNNING'&&hb.current_phase){
+    phaseWrap.style.display='block';
+    phaseWrap.innerHTML=renderPhaseStrip(hb.current_phase, hb.phase_results||{}, taskId);
+  } else {
+    phaseWrap.style.display='none';
+    phaseWrap.innerHTML='';
+  }
+}
+
+/* ══ PHASE STRIP ══ */
+function renderPhaseStrip(currentPhase, phaseResults, taskId){
+  var PHASES=[
+    {id:'thinking',                  icon:'🧠', label:'Thinking',    rk:null},
+    {id:'writing_unit_tests',        icon:'🧪', label:'W.Tests',     rk:null},
+    {id:'writing_code',              icon:'💻', label:'Coding',      rk:null},
+    {id:'reviewing',                 icon:'🔍', label:'Reviewing',   rk:null},
+    {id:'revising',                  icon:'✏️', label:'Revising',    rk:null},
+    {id:'compiling',                 icon:'⚙️', label:'Compile',     rk:'compile'},
+    {id:'running_unit_tests',        icon:'▶',  label:'Unit Tests',  rk:'unit_tests'},
+    {id:'debugging',                 icon:'🔧', label:'Debugging',   rk:null},
+    {id:'running_integration_tests', icon:'🔗', label:'Integration', rk:'integration_tests'}
+  ];
+  var ORDER=PHASES.map(function(p){return p.id;});
+  var activeIdx=ORDER.indexOf(currentPhase);
+
+  var items=PHASES.map(function(p,i){
+    var state, dot;
+    if(i===activeIdx){
+      state='phase-active'; dot='';
+    } else if(i<activeIdx){
+      if(p.rk && phaseResults[p.rk]!==undefined && phaseResults[p.rk]!==null){
+        state=phaseResults[p.rk]?'phase-pass':'phase-fail';
+        dot=phaseResults[p.rk]?'✓':'✗';
+      } else {
+        state='phase-pass'; dot='✓';
+      }
+    } else {
+      state='phase-pending'; dot='';
+    }
+    return '<div class="phase-item '+state+'">'+
+      '<div class="phase-icon">'+p.icon+'</div>'+
+      '<div class="phase-dot">'+dot+'</div>'+
+      '<div class="phase-name">'+p.label+'</div>'+
+      '</div>';
+  }).join('');
+
+  // Result badges row
+  var badgeDefs=[
+    {key:'compile',           label:'Compile'},
+    {key:'unit_tests',        label:'Unit Tests'},
+    {key:'integration_tests', label:'Integ. Tests'}
+  ];
+  var badges=badgeDefs.map(function(b){
+    var v=phaseResults[b.key];
+    if(v===undefined||v===null){
+      return '<span class="prb prb-pend">⬜ '+b.label+'</span>';
+    }
+    return v
+      ?'<span class="prb prb-pass">✓ '+b.label+'</span>'
+      :'<span class="prb prb-fail">✗ '+b.label+'</span>';
+  }).join('');
+
+  return '<div class="phase-strip-label">'+
+    '<span>Pipeline Activity</span>'+
+    (taskId?'<span style="color:var(--cyan);font-family:var(--mono);font-size:.5rem">'+taskId+'</span>':'')+
+    '</div>'+
+    '<div class="phase-strip">'+items+'</div>'+
+    '<div class="phase-result-row">'+badges+'</div>';
 }
 
 /* ══ SIDEBAR NAV ══ */
