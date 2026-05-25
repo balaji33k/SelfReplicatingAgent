@@ -1,3 +1,7 @@
+# Local documents — not for deployment
+SYSTEM_DOCUMENT.md
+*.local.md
+
 # Python
 __pycache__/
 *.pyc
