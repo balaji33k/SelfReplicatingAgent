@@ -1,14 +1,14 @@
 """
 spawner.py — Creates and launches the next generation.
 
-GUARDRAIL: No Silent Cloning.
-  The LLM must supply ALL logic .py files for the next generation.
-  This spawner does NOT copy parent logic files — it writes only what the LLM generated.
-  If any required file is missing, spawn is aborted with a RuntimeError.
+GUARDRAIL: No Copying — Direct or Indirect.
+  The spawner does NOT copy parent logic files — it writes only what the LLM generated.
+  Every generated file is checked against the parent for:
+    1. Direct copy  — byte-identical content → hard reject
+    2. Indirect copy — difflib similarity > 85% (same logic, renamed variables) → hard reject
 
-Infrastructure files (telemetry.py, lineage_memory.py) and problem_pool.json
-are always copied from the project root — they are not logic, so the LLM never
-generates them.
+Infrastructure files (llm_client.py, telemetry.py, lineage_memory.py) and
+problem_pool.json are always copied — they are infrastructure, not logic.
 """
 import ast
 import datetime
@@ -97,29 +97,47 @@ class Spawner:
                 f"Spawn aborted — offspring must be fully self-generated, not cloned."
             )
 
-        # Guard 2: Content-identity check — no silent clones on CORE logic files.
-        # Stable structural files (contracts, base class) are exempt since they
-        # rarely change and the per-file generation strategy produces them faithfully.
-        CLONE_EXEMPT = {"contracts.py", "agent_base.py", "task_manager.py"}
+        # Guard 2: Direct + indirect copy check on ALL generated logic files.
+        # - Exact match (ratio=1.0) → direct copy → hard reject
+        # - High similarity (ratio>0.85) → indirect copy (same logic, renamed vars) → hard reject
+        # contracts.py and agent_base.py are interface/base files that legitimately
+        # change very little — exempt from the similarity gate (still checked for exact match).
+        import difflib
+        SIMILARITY_EXEMPT = {"contracts.py", "agent_base.py"}
+        SIMILARITY_THRESHOLD = 0.85   # above this → near-clone → rejected
+
         if current_gen_dir and current_gen_dir.exists():
-            cloned = []
-            for fname in REQUIRED_LOGIC_FILES:
-                if fname in CLONE_EXEMPT:
+            exact_copies, near_copies = [], []
+            for fname, child_src in new_files.items():
+                if not fname.endswith(".py"):
                     continue
                 parent_path = current_gen_dir / fname
-                if parent_path.exists():
-                    try:
-                        parent_src = parent_path.read_text(encoding="utf-8").strip()
-                        child_src = new_files[fname].strip()
-                        if parent_src == child_src:
-                            cloned.append(fname)
-                    except Exception:
-                        pass
-            if cloned:
+                if not parent_path.exists():
+                    continue
+                try:
+                    parent_src = parent_path.read_text(encoding="utf-8").strip()
+                    child_stripped = child_src.strip()
+                    if parent_src == child_stripped:
+                        exact_copies.append(fname)
+                    elif fname not in SIMILARITY_EXEMPT:
+                        ratio = difflib.SequenceMatcher(
+                            None, parent_src, child_stripped, autojunk=False
+                        ).ratio()
+                        if ratio > SIMILARITY_THRESHOLD:
+                            near_copies.append(f"{fname} ({ratio:.0%} similar)")
+                except Exception:
+                    pass
+
+            if exact_copies:
                 raise RuntimeError(
-                    f"LLM produced files IDENTICAL to parent generation: {cloned}. "
-                    f"This is a silent clone — spawn aborted. "
-                    f"The LLM must design improved logic, not copy parent code."
+                    f"Direct copy detected — files IDENTICAL to parent: {exact_copies}. "
+                    f"Spawn aborted. The LLM must write new logic, not copy parent code."
+                )
+            if near_copies:
+                raise RuntimeError(
+                    f"Indirect copy detected — files too similar to parent (>{SIMILARITY_THRESHOLD:.0%}): "
+                    f"{near_copies}. "
+                    f"Spawn aborted. Same algorithm with renamed variables counts as copying."
                 )
 
         # Guard 3: Compile check
