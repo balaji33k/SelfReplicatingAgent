@@ -43,17 +43,19 @@ _GROQ_FALLBACK_ORDER = [
 ]
 
 # ── Gemini models (Google AI free tier) ───────────────────────────────────────
-# Free limits: 1,500 RPD / 1,000,000 TPD / 15 RPM per model
+# Free limits: 1,500 RPD / 15 RPM per model (NOT a rolling window — calendar day)
+# gemini-1.5-flash and gemini-1.5-flash-8b are deprecated as of 2026 — removed.
 _GEMINI_LIMITS: Dict[str, Dict[str, int]] = {
-    "gemini-2.0-flash":      {"tpd": 1_000_000, "tpm": 15},   # tpm = requests/min
-    "gemini-1.5-flash":      {"tpd": 1_000_000, "tpm": 15},
-    "gemini-1.5-flash-8b":   {"tpd": 1_000_000, "tpm": 15},
+    "gemini-2.0-flash":      {"tpd": 1_500,  "tpm": 15},  # tpd=RPD, tpm=RPM
+    "gemini-2.0-flash-lite": {"tpd": 1_500,  "tpm": 30},  # higher RPM
 }
 _GEMINI_FALLBACK_ORDER = [
-    "gemini-2.0-flash",      # newest, fastest
-    "gemini-1.5-flash",      # very reliable
-    "gemini-1.5-flash-8b",   # lightest
+    "gemini-2.0-flash",       # primary — best quality
+    "gemini-2.0-flash-lite",  # fallback — faster/cheaper
 ]
+
+# Gemini RPM sleep: when rate-limited and can't parse retry time, sleep one RPM window
+_GEMINI_RPM_SLEEP_SEC = 65   # 60s window + 5s buffer
 
 _ALL_MODEL_LIMITS = {**_GROQ_LIMITS, **_GEMINI_LIMITS}
 _DEFAULT_LIMITS   = {"tpd": 500_000, "tpm": 30_000}
@@ -217,7 +219,26 @@ class LLMClient:
                             f"[llm_client] rate-limit on {current_model} — "
                             f"retry_sec={retry_sec:.0f}"
                         )
-                        if retry_sec <= _MAX_TPM_SLEEP_SEC:
+
+                        # Gemini-specific: quota errors don't include retry time.
+                        # _parse_retry_seconds returns >900 when unparseable.
+                        # For Gemini, this is almost always an RPM (per-minute) limit
+                        # not a daily limit — sleep one RPM window and retry same model.
+                        is_gemini_rpm = (
+                            _is_gemini_model(current_model)
+                            and retry_sec > _MAX_TPM_SLEEP_SEC
+                            and ("resource_exhausted" in err_str.lower()
+                                 or "quota" in err_str.lower()
+                                 or "429" in err_str)
+                        )
+                        if is_gemini_rpm:
+                            logger.warning(
+                                f"[llm_client] Gemini RPM limit on {current_model} — "
+                                f"sleeping {_GEMINI_RPM_SLEEP_SEC}s then retrying"
+                            )
+                            time.sleep(_GEMINI_RPM_SLEEP_SEC)
+                            # Don't switch — same model, same attempt slot
+                        elif retry_sec <= _MAX_TPM_SLEEP_SEC:
                             sleep_time = retry_sec + 5
                             logger.warning(
                                 f"[llm_client] TPM limit on {current_model} — "
@@ -262,7 +283,12 @@ class LLMClient:
                 f"(attempt {recovery_attempt+1}/{_MAX_RECOVERY_ATTEMPTS})..."
             )
             time.sleep(_RECOVERY_WAIT_SEC)
+            # Clear all exhausted/unavailable sets — rolling windows reset
             self._exhausted_models.clear()
+            self._tpd_exhausted.clear()
+            self._unavailable.clear()
+            self._retry_after.clear()
+            self._flush_model_status()
             # Restart from beginning of chain
             first = self._build_fallback_chain()[0]
             self._switch_to_model(first)
