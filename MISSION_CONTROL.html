@@ -614,10 +614,6 @@
         </div>
       </div>
 
-      <!-- Phase steps strip -->
-      <div class="phase-bar-wrap" id="phase-bar-wrap" style="display:none">
-        <div class="phase-steps" id="phase-steps"></div>
-      </div>
 
       <!-- Pipeline Topology — inline inside hero card -->
       <div id="topology-inline" style="display:none;margin-top:16px">
@@ -1396,14 +1392,7 @@ function renderHero(){
     actWrap.style.display='none';
   }
 
-  // Phase step strip
-  var phaseBarWrap=document.getElementById('phase-bar-wrap');
-  var phaseSteps=document.getElementById('phase-steps');
-  if(hb.status==='RUNNING'&&hb.active_task_id){
-    phaseBarWrap.style.display='block';
-    phaseSteps.innerHTML=renderPhaseSteps(hb.current_phase,hb.topology||{});
-  } else {
-    phaseBarWrap.style.display='none';
+  if(false){  // phase strip removed
   }
 
 }
