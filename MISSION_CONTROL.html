@@ -489,31 +489,19 @@
       <div class="card-title">⚙️ Evolution Controls</div>
       <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">
 
-        <!-- Custom model picker -->
+        <!-- Native model select — avoids all stacking-context issues -->
         <div style="flex:1;min-width:260px">
           <div style="font-size:.65rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">
-            Groq Model (free tier)
+            LLM Model
           </div>
-          <!-- Trigger button -->
-          <div id="model-picker-btn" onclick="toggleModelPicker()" style="
-            display:flex;align-items:center;justify-content:space-between;
-            background:rgba(0,243,255,.06);border:1px solid rgba(0,243,255,.3);
+          <select id="model-picker-select" onchange="selectModel(this.value)" style="
+            width:100%;background:#0d0e20;border:1px solid rgba(0,243,255,.3);
             border-radius:8px;color:#e0e0e0;padding:9px 13px;font-size:.8rem;
-            cursor:pointer;user-select:none;gap:8px">
-            <span id="model-picker-label" style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-              — select model —
-            </span>
-            <span style="color:var(--dim);font-size:.7rem">▾</span>
-          </div>
-          <!-- Dropdown panel — appended to body on open so backdrop-filter
-               stacking context on .card cannot clip it -->
-          <div id="model-picker-panel" style="
-            display:none;position:fixed;z-index:99999;
-            background:#0d0e20;border:1px solid rgba(0,243,255,.25);
-            border-radius:10px;min-width:340px;
-            box-shadow:0 8px 32px rgba(0,0,0,.8);overflow:hidden">
-            <div id="model-picker-list"></div>
-          </div>
+            cursor:pointer;font-family:inherit;outline:none;
+            -webkit-appearance:none;appearance:none">
+            <option value="">— select model —</option>
+          </select>
+          <div id="model-status-hint" style="font-size:.6rem;color:#64748b;margin-top:5px;min-height:14px"></div>
         </div>
 
         <!-- Buttons -->
@@ -702,7 +690,7 @@ function setCtrlStatus(msg,color){
   if(el){el.textContent=msg;el.style.color=color||'#00f3ff';}
 }
 
-/* Build and show the custom model dropdown with live status badges */
+/* Populate the native <select> with model options + live status labels */
 function renderModelPicker(){
   var ms=STATE.modelStatus||{};
   var active=ms.active||'';
@@ -710,129 +698,74 @@ function renderModelPicker(){
   var unavailable=ms.unavailable||[];
   var geminiEnabled=ms.gemini_enabled||false;
 
-  var list=document.getElementById('model-picker-list');
-  if(!list)return;
+  var sel=document.getElementById('model-picker-select');
+  var hint=document.getElementById('model-status-hint');
+  if(!sel)return;
 
   var lastProvider='';
-  var html='';
+  var html='<option value="">— select model —</option>';
   _GROQ_MODELS.forEach(function(m){
     var isActive=(m.id===active);
     var isExhausted=(exhausted.indexOf(m.id)>=0);
     var isUnavail=(unavailable.indexOf(m.id)>=0);
-    var isSelected=(m.id===_selectedModel);
     var isGemini=(m.provider==='gemini');
     var noKey=isGemini&&!geminiEnabled;
 
-    // Provider section divider
+    // Optgroup divider per provider
     if(m.provider!==lastProvider){
+      if(lastProvider) html+='</optgroup>';
       lastProvider=m.provider;
-      var providerLabel=isGemini
-        ?'<span style="color:#4285f4">GEMINI</span> — Google AI Free Tier (1M TPD)'
-        :'<span style="color:#f97316">GROQ</span> — Free Tier (rolling 24h)';
-      html+='<div style="padding:6px 14px 4px;font-size:.58rem;color:#64748b;'+
-        'text-transform:uppercase;letter-spacing:1.5px;border-top:1px solid rgba(255,255,255,.07);'+
-        'background:rgba(255,255,255,.02)">'+providerLabel+'</div>';
+      var grpLabel=isGemini?'── GEMINI (Google AI Free Tier) ──':'── GROQ (Free Tier) ──';
+      html+='<optgroup label="'+grpLabel+'">';
     }
 
-    // Status dot
-    var dot,dotColor;
-    if(noKey){
-      dot='⚠'; dotColor='#f59e0b';
-    } else if(isUnavail){
-      dot='✕'; dotColor='#64748b';
-    } else if(isExhausted){
-      dot='●'; dotColor='#ff3131';
-    } else {
-      dot='●'; dotColor='#39ff14';
-    }
+    // Status prefix in the label
+    var prefix='';
+    if(noKey)           prefix='⚠ ';
+    else if(isUnavail)  prefix='✕ ';
+    else if(isExhausted)prefix='⬤ ';
+    else                prefix='● ';
 
-    var bg=isSelected?'rgba(0,243,255,.12)':'transparent';
-    var opacity=(isUnavail||noKey)?'0.55':'1';
+    var suffix='';
+    if(isActive)        suffix=' [ACTIVE]';
+    else if(noKey)      suffix=' [no key]';
+    else if(isExhausted)suffix=' [exhausted]';
+    else if(isUnavail)  suffix=' [unavailable]';
 
-    html+='<div onclick="selectModel(\''+m.id+'\')" style="'+
-      'display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;'+
-      'opacity:'+opacity+';background:'+bg+';transition:.15s;'+
-      'border-bottom:1px solid rgba(255,255,255,.04)"'+
-      ' onmouseover="this.style.background=\'rgba(0,243,255,.08)\'"'+
-      ' onmouseout="this.style.background=\''+bg+'\'"'+
-      '>';
-
-    // Dot
-    html+='<span style="color:'+dotColor+';font-size:.85rem;flex-shrink:0">'+dot+'</span>';
-
-    // Info
-    html+='<div style="flex:1;min-width:0">';
-    // Name row + badges
-    html+='<div style="font-size:.78rem;color:#e0e0e0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">';
-    html+=m.name;
-    if(isActive) html+=' <span style="font-size:.6rem;color:#39ff14;border:1px solid rgba(57,255,20,.3);padding:1px 5px;border-radius:4px;margin-left:4px">ACTIVE</span>';
-    if(isGemini) html+=' <span style="font-size:.6rem;color:#4285f4;border:1px solid rgba(66,133,244,.3);padding:1px 5px;border-radius:4px;margin-left:4px">GEMINI</span>';
-    html+='</div>';
-    // Sub-row: limits + status
-    html+='<div style="font-size:.62rem;margin-top:1px;color:';
-    html+=(isUnavail||noKey)?'#64748b':isExhausted?'#ff3131':'#64748b';
-    html+='">'+m.tpd+' TPD / '+m.tpm;
-    if(noKey)     html+=' — <span style="color:#f59e0b">add GEMINI_API_KEY secret</span>';
-    else if(isExhausted) html+=' — <span style="color:#ff3131">exhausted</span>';
-    else if(isUnavail)   html+=' — <span style="color:#64748b">unavailable</span>';
-    html+='</div>';
-    html+='</div></div>';
+    html+='<option value="'+m.id+'"'+(m.id===_selectedModel?' selected':'')+'>';
+    html+=prefix+m.name+' — '+m.tpd+'/'+m.tpm+suffix;
+    html+='</option>';
   });
-  list.innerHTML=html;
-}
+  if(lastProvider)html+='</optgroup>';
+  sel.innerHTML=html;
 
-function toggleModelPicker(){
-  var panel=document.getElementById('model-picker-panel');
-  var btn=document.getElementById('model-picker-btn');
-  if(!panel||!btn)return;
-
-  if(panel.style.display==='none'){
-    // Move panel to <body> so it escapes the card's backdrop-filter stacking context
-    if(panel.parentElement!==document.body){
-      document.body.appendChild(panel);
-    }
-
-    // Position below the trigger button using fixed coordinates
-    var r=btn.getBoundingClientRect();
-    var panelW=Math.max(r.width, 340);
-    panel.style.width=panelW+'px';
-    panel.style.left=r.left+'px';
-    // Flip upward if not enough room below
-    var spaceBelow=window.innerHeight-r.bottom;
-    if(spaceBelow<250){
-      panel.style.top='';
-      panel.style.bottom=(window.innerHeight-r.top+4)+'px';
+  // Update the hint line below the select
+  if(hint){
+    var selModel=_GROQ_MODELS.find(function(x){return x.id===_selectedModel;});
+    if(!selModel){
+      hint.textContent='';
     } else {
-      panel.style.bottom='';
-      panel.style.top=(r.bottom+4)+'px';
+      var isGemini=(selModel.provider==='gemini');
+      var noKey=isGemini&&!geminiEnabled;
+      if(noKey)
+        hint.innerHTML='<span style="color:#f59e0b">⚠ Add GoogleAPIKey / GEMINI_API_KEY as HF Space secret</span>';
+      else if(exhausted.indexOf(selModel.id)>=0)
+        hint.innerHTML='<span style="color:#ff3131">⬤ Token limit reached — auto-fallback to next model</span>';
+      else if(unavailable.indexOf(selModel.id)>=0)
+        hint.innerHTML='<span style="color:#64748b">✕ Unavailable on this account</span>';
+      else
+        hint.innerHTML='<span style="color:#39ff14">● Available</span>';
     }
-
-    renderModelPicker();
-    panel.style.display='block';
-    setTimeout(function(){
-      document.addEventListener('click',closePicker,{once:true,capture:true});
-    },0);
-  } else {
-    panel.style.display='none';
   }
 }
 
-function closePicker(e){
-  var panel=document.getElementById('model-picker-panel');
-  var btn=document.getElementById('model-picker-btn');
-  if(panel&&btn&&!panel.contains(e.target)&&!btn.contains(e.target)){
-    panel.style.display='none';
-  }
-}
+/* toggleModelPicker / closePicker removed — native <select> handles open/close natively */
 
 function selectModel(id){
   _selectedModel=id;
   var m=_GROQ_MODELS.find(function(x){return x.id===id;})||{name:id};
-  var lbl=document.getElementById('model-picker-label');
-  if(lbl)lbl.textContent=m.name;
-  var panel=document.getElementById('model-picker-panel');
-  if(panel)panel.style.display='none';
-  setCtrlStatus('Model "'+m.name+'" selected — click Apply to save.','#ffb300');
+  renderModelPicker(); // refresh hint line
+  if(id) setCtrlStatus('Model "'+m.name+'" selected — click Apply to save.','#ffb300');
 }
 
 async function setModel(){
@@ -873,21 +806,20 @@ async function restartEvolution(){
   }
 }
 
-/* Sync picker label & status with live model_status.json */
+/* Sync native select with live model_status.json */
 function syncModelSelector(){
   var ms=STATE.modelStatus||{};
   var active=ms.active||'';
   if(!active)return;
-  // Update label if user hasn't manually chosen something different
-  var lbl=document.getElementById('model-picker-label');
-  if(lbl&&!_selectedModel){
-    var m=_GROQ_MODELS.find(function(x){return x.id===active;});
-    lbl.textContent=m?m.name:active;
+  // Auto-select active model if user hasn't chosen manually
+  if(!_selectedModel){
     _selectedModel=active;
   }
-  // Re-render open panel if visible
-  var panel=document.getElementById('model-picker-panel');
-  if(panel&&panel.style.display!=='none')renderModelPicker();
+  // Always refresh options + hint (status may have changed)
+  renderModelPicker();
+  // Keep the <select> element in sync with _selectedModel
+  var sel=document.getElementById('model-picker-select');
+  if(sel&&sel.value!==_selectedModel)sel.value=_selectedModel;
 }
 
 /* ── Main State ─────────────────────────────────────────────────────────── */
