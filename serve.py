@@ -38,12 +38,13 @@ _proc_lock = threading.Lock()
 # Confirmed-working models on this account.
 # Groq: free tier, rolling 24h TPD window.
 # Gemini: Google AI free tier, 1M TPD / 1500 RPD / 15 RPM.
+# Gemini = primary, Groq = fallback
 ALL_MODELS = [
+    {"id": "gemini-2.0-flash",      "name": "Gemini 2.0 Flash",      "tpd": "1500rpd", "tpm": "15rpm", "provider": "gemini"},
+    {"id": "gemini-2.0-flash-lite", "name": "Gemini 2.0 Flash Lite", "tpd": "1500rpd", "tpm": "30rpm", "provider": "gemini"},
     {"id": "meta-llama/llama-4-scout-17b-16e-instruct", "name": "Llama 4 Scout 17B",       "tpd": "500k",  "tpm": "30k",  "provider": "groq"},
     {"id": "llama-3.1-8b-instant",                       "name": "Llama 3.1 8B Instant",    "tpd": "500k",  "tpm": "20k",  "provider": "groq"},
     {"id": "llama-3.3-70b-versatile",                    "name": "Llama 3.3 70B Versatile", "tpd": "100k",  "tpm": "12k",  "provider": "groq"},
-    {"id": "gemini-2.0-flash",      "name": "Gemini 2.0 Flash",      "tpd": "1500rpd", "tpm": "15rpm", "provider": "gemini"},
-    {"id": "gemini-2.0-flash-lite", "name": "Gemini 2.0 Flash Lite", "tpd": "1500rpd", "tpm": "30rpm", "provider": "gemini"},
 ]
 # Keep old name as alias for any code that references it
 GROQ_FREE_MODELS = ALL_MODELS

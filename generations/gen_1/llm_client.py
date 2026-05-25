@@ -37,9 +37,9 @@ _GROQ_LIMITS: Dict[str, Dict[str, int]] = {
     "llama-3.3-70b-versatile":                    {"tpd": 100_000, "tpm": 12_000},
 }
 _GROQ_FALLBACK_ORDER = [
-    "meta-llama/llama-4-scout-17b-16e-instruct",  # primary   (500k TPD / 30k TPM)
-    "llama-3.1-8b-instant",                        # fallback1 (500k TPD / 20k TPM)
-    "llama-3.3-70b-versatile",                     # fallback2 (100k TPD / 12k TPM)
+    "meta-llama/llama-4-scout-17b-16e-instruct",  # groq fallback1 (500k TPD / 30k TPM)
+    "llama-3.1-8b-instant",                        # groq fallback2 (500k TPD / 20k TPM)
+    "llama-3.3-70b-versatile",                     # groq fallback3 (100k TPD / 12k TPM)
 ]
 
 # ── Gemini models (Google AI free tier) ───────────────────────────────────────
@@ -321,11 +321,10 @@ class LLMClient:
         )
 
     def _build_fallback_chain(self) -> List[str]:
-        """Return ordered model list: Groq models first, then Gemini if key present."""
-        chain = list(_GROQ_FALLBACK_ORDER)
+        """Gemini first (primary), Groq as fallback."""
         if self._gemini_key:
-            chain.extend(_GEMINI_FALLBACK_ORDER)
-        return chain
+            return list(_GEMINI_FALLBACK_ORDER) + list(_GROQ_FALLBACK_ORDER)
+        return list(_GROQ_FALLBACK_ORDER)
 
     def _switch_to_model(self, model_name: str) -> bool:
         """Switch to a specific model. Returns True on success."""

@@ -58,7 +58,7 @@ class AgentTopologyConfig:
 
 
 class LLMConfig:
-    def __init__(self, model_name: str = "meta-llama/llama-4-scout-17b-16e-instruct", api_key_env_var: str = "GROQ_API_KEY", temperature: float = 0.7):
+    def __init__(self, model_name: str = "gemini-2.0-flash", api_key_env_var: str = "GROQ_API_KEY", temperature: float = 0.7):
         self.model_name = model_name
         # api_key is kept for compatibility but LLMClient reads directly from env vars
         self.api_key = os.getenv(api_key_env_var) or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")

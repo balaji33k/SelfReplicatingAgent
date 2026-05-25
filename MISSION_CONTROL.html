@@ -687,12 +687,13 @@
 
 <script>
 /* ── Evolution Controls ─────────────────────────────────────────────────── */
+// Gemini = primary, Groq = fallback
 var _GROQ_MODELS=[
+  {id:'gemini-2.0-flash',      name:'Gemini 2.0 Flash',      tpd:'1500rpd', tpm:'15rpm', provider:'gemini'},
+  {id:'gemini-2.0-flash-lite', name:'Gemini 2.0 Flash Lite', tpd:'1500rpd', tpm:'30rpm', provider:'gemini'},
   {id:'meta-llama/llama-4-scout-17b-16e-instruct', name:'Llama 4 Scout 17B',       tpd:'500k',  tpm:'30k',   provider:'groq'},
   {id:'llama-3.1-8b-instant',                       name:'Llama 3.1 8B Instant',    tpd:'500k',  tpm:'20k',   provider:'groq'},
   {id:'llama-3.3-70b-versatile',                    name:'Llama 3.3 70B Versatile', tpd:'100k',  tpm:'12k',   provider:'groq'},
-  {id:'gemini-2.0-flash',      name:'Gemini 2.0 Flash',      tpd:'1500rpd', tpm:'15rpm', provider:'gemini'},
-  {id:'gemini-2.0-flash-lite', name:'Gemini 2.0 Flash Lite', tpd:'1500rpd', tpm:'30rpm', provider:'gemini'},
 ];
 var _selectedModel='';
 
