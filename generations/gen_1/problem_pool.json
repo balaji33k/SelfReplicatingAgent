@@ -2,34 +2,6 @@
   "training": {
     "swe": [
       {
-        "id": "pydata__xarray-3151",
-        "difficulty": "15 min - 1 hour",
-        "repo": "pydata/xarray",
-        "problem_statement": "xr.combine_by_coords raises ValueError if identical coordinates are non-monotonic\n#### MCVE Code Sample\r\n<!-- In order for the maintainers to efficiently understand and prioritize issues, we ask you post a \"Minimal, Complete and Verifiable Example\" (MCVE): http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports -->\r\n\r\n```python\r\nimport xarray as xr\r\nimport numpy as np\r\n\r\n#yCoord = ['a', 'b', 'c']  # works without error\r\nyCoord = ['a', 'c', 'b']  # raises ValueError on combine\r\n\r\nds1 = xr.Dataset(\r\n    data_vars=dict(\r\n        data=(['x', 'y'], np.random.rand(3, 3))\r\n    ),\r\n    coords=dict(\r\n        x=[1, 2, 3],\r\n        y=yCoord\r\n    )\r\n)\r\n\r\nds2 = xr.Dataset(\r\n    data_vars=dict(\r\n        data=(['x', 'y'], np.random.rand(4, 3))\r\n    ),\r\n    coords = dict(\r\n        x=[4, 5, 6, 7",
-        "test_cases": "[\"x"
-      },
-      {
-        "id": "pydata__xarray-3305",
-        "difficulty": "15 min - 1 hour",
-        "repo": "pydata/xarray",
-        "problem_statement": "DataArray.quantile does not honor `keep_attrs`\n#### MCVE Code Sample\r\n<!-- In order for the maintainers to efficiently understand and prioritize issues, we ask you post a \"Minimal, Complete and Verifiable Example\" (MCVE): http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports -->\r\n\r\n```python\r\n# Your code here\r\nimport xarray as xr                                                                                                                                                                                 \r\nda = xr.DataArray([0, 0], dims=\"x\", attrs={'units':'K'})                                                                                                                                            \r\nout = da.quantile(.9, dim='x', keep_attrs=True)                                ",
-        "test_cases": "[\"x"
-      },
-      {
-        "id": "pydata__xarray-3677",
-        "difficulty": "15 min - 1 hour",
-        "repo": "pydata/xarray",
-        "problem_statement": "Merging dataArray into dataset using dataset method fails\nWhile it's possible to merge a dataset and a dataarray object using the top-level `merge()` function, if you try the same thing with the `ds.merge()` method it fails.\r\n\r\n```python\r\nimport xarray as xr\r\n\r\nds = xr.Dataset({'a': 0})\r\nda = xr.DataArray(1, name='b')\r\n\r\nexpected = xr.merge([ds, da])  # works fine\r\nprint(expected)\r\n\r\nds.merge(da)  # fails\r\n```\r\n\r\nOutput:\r\n```\r\n<xarray.Dataset>\r\nDimensions:  ()\r\nData variables:\r\n    a        int64 0\r\n    b        int64 1\r\n\r\nTraceback (most recent call last):\r\n  File \"mwe.py\", line 6, in <module>\r\n    actual = ds.merge(da)\r\n  File \"/home/tegn500/Documents/Work/Code/xarray/xarray/core/dataset.py\", line 3591, in merge\r\n    fill_value=fill_value,\r\n  File \"/home/tegn500/Documents/Work/Code/xarra",
-        "test_cases": "[\"x"
-      },
-      {
-        "id": "pydata__xarray-3993",
-        "difficulty": "1-4 hours",
-        "repo": "pydata/xarray",
-        "problem_statement": "DataArray.integrate has a 'dim' arg, but Dataset.integrate has a 'coord' arg\nThis is just a minor gripe but I think it should be fixed.\r\n\r\nThe API syntax is inconsistent:\r\n```python\r\nds.differentiate(coord='x')\r\nda.differentiate(coord='x')\r\nds.integrate(coord='x')\r\nda.integrate(dim='x')   # why dim??\r\n```\r\nIt should definitely be `coord` - IMO it doesn't make sense to integrate or differentiate over a dim because a dim by definition has no information about the distance between grid points. I think because the distinction between dims and coords is one of the things that new users have to learn about, we should be strict to not confuse up the meanings in the documentation/API.\r\n\r\nThe discussion on the original PR [seems to agree](https://github.com/pydata/xarray/pull/2653#discussion_r24616",
-        "test_cases": "[\"x"
-      },
-      {
         "id": "pydata__xarray-4075",
         "difficulty": "<15 min fix",
         "repo": "pydata/xarray",
@@ -58,6 +30,34 @@
         "test_cases": "[\"x"
       },
       {
+        "id": "pydata__xarray-6461",
+        "difficulty": "<15 min fix",
+        "repo": "pydata/xarray",
+        "problem_statement": "xr.where with scalar as second argument fails with keep_attrs=True\n### What happened?\n\n``` python\r\nimport xarray as xr\r\n\r\nxr.where(xr.DataArray([1, 2, 3]) > 0, 1, 0)\r\n```\r\n\r\nfails with\r\n\r\n```\r\n   1809 if keep_attrs is True:\r\n   1810     # keep the attributes of x, the second parameter, by default to\r\n   1811     # be consistent with the `where` method of `DataArray` and `Dataset`\r\n-> 1812     keep_attrs = lambda attrs, context: attrs[1]\r\n   1814 # alignment for three arguments is complicated, so don't support it yet\r\n   1815 return apply_ufunc(\r\n   1816     duck_array_ops.where,\r\n   1817     cond,\r\n   (...)\r\n   1823     keep_attrs=keep_attrs,\r\n   1824 )\r\n\r\nIndexError: list index out of range\r\n```\r\n\r\nThe workaround is to pass `keep_attrs=False`\n\n### What did you expect to happen?\n\n_No respo",
+        "test_cases": "[\"x"
+      },
+      {
+        "id": "pydata__xarray-3151",
+        "difficulty": "15 min - 1 hour",
+        "repo": "pydata/xarray",
+        "problem_statement": "xr.combine_by_coords raises ValueError if identical coordinates are non-monotonic\n#### MCVE Code Sample\r\n<!-- In order for the maintainers to efficiently understand and prioritize issues, we ask you post a \"Minimal, Complete and Verifiable Example\" (MCVE): http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports -->\r\n\r\n```python\r\nimport xarray as xr\r\nimport numpy as np\r\n\r\n#yCoord = ['a', 'b', 'c']  # works without error\r\nyCoord = ['a', 'c', 'b']  # raises ValueError on combine\r\n\r\nds1 = xr.Dataset(\r\n    data_vars=dict(\r\n        data=(['x', 'y'], np.random.rand(3, 3))\r\n    ),\r\n    coords=dict(\r\n        x=[1, 2, 3],\r\n        y=yCoord\r\n    )\r\n)\r\n\r\nds2 = xr.Dataset(\r\n    data_vars=dict(\r\n        data=(['x', 'y'], np.random.rand(4, 3))\r\n    ),\r\n    coords = dict(\r\n        x=[4, 5, 6, 7",
+        "test_cases": "[\"x"
+      },
+      {
+        "id": "pydata__xarray-3305",
+        "difficulty": "15 min - 1 hour",
+        "repo": "pydata/xarray",
+        "problem_statement": "DataArray.quantile does not honor `keep_attrs`\n#### MCVE Code Sample\r\n<!-- In order for the maintainers to efficiently understand and prioritize issues, we ask you post a \"Minimal, Complete and Verifiable Example\" (MCVE): http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports -->\r\n\r\n```python\r\n# Your code here\r\nimport xarray as xr                                                                                                                                                                                 \r\nda = xr.DataArray([0, 0], dims=\"x\", attrs={'units':'K'})                                                                                                                                            \r\nout = da.quantile(.9, dim='x', keep_attrs=True)                                ",
+        "test_cases": "[\"x"
+      },
+      {
+        "id": "pydata__xarray-3677",
+        "difficulty": "15 min - 1 hour",
+        "repo": "pydata/xarray",
+        "problem_statement": "Merging dataArray into dataset using dataset method fails\nWhile it's possible to merge a dataset and a dataarray object using the top-level `merge()` function, if you try the same thing with the `ds.merge()` method it fails.\r\n\r\n```python\r\nimport xarray as xr\r\n\r\nds = xr.Dataset({'a': 0})\r\nda = xr.DataArray(1, name='b')\r\n\r\nexpected = xr.merge([ds, da])  # works fine\r\nprint(expected)\r\n\r\nds.merge(da)  # fails\r\n```\r\n\r\nOutput:\r\n```\r\n<xarray.Dataset>\r\nDimensions:  ()\r\nData variables:\r\n    a        int64 0\r\n    b        int64 1\r\n\r\nTraceback (most recent call last):\r\n  File \"mwe.py\", line 6, in <module>\r\n    actual = ds.merge(da)\r\n  File \"/home/tegn500/Documents/Work/Code/xarray/xarray/core/dataset.py\", line 3591, in merge\r\n    fill_value=fill_value,\r\n  File \"/home/tegn500/Documents/Work/Code/xarra",
+        "test_cases": "[\"x"
+      },
+      {
         "id": "pydata__xarray-4687",
         "difficulty": "15 min - 1 hour",
         "repo": "pydata/xarray",
@@ -69,41 +69,6 @@
         "difficulty": "15 min - 1 hour",
         "repo": "pydata/xarray",
         "problem_statement": "Naming a dimension \"method\" throws error when calling \".loc\"\n#### Code Sample, a copy-pastable example if possible\r\n\r\n```python\r\nimport numpy as np\r\nfrom xarray import DataArray\r\nempty = np.zeros((2,2))\r\nD1 = DataArray(empty, dims=['dim1', 'dim2'],   coords={'dim1':['x', 'y'], 'dim2':['a', 'b']})\r\nD2 = DataArray(empty, dims=['dim1', 'method'], coords={'dim1':['x', 'y'], 'method':['a', 'b']})\r\n\r\nprint(D1.loc[dict(dim1='x', dim2='a')])    # works\r\nprint(D2.loc[dict(dim1='x', method='a')])  # does not work!! \r\n```\r\n#### Problem description\r\n\r\nThe name of the dimension should be irrelevant. The error message \r\n\r\n```\r\nValueError: Invalid fill method. Expecting pad (ffill), backfill (bfill) or nearest.\r\n```\r\n\r\nsuggests that at some point the `dims` are given to another method in unsanitized form",
-        "test_cases": "[\"x"
-      },
-      {
-        "id": "pydata__xarray-4966",
-        "difficulty": "15 min - 1 hour",
-        "repo": "pydata/xarray",
-        "problem_statement": "Handling of signed bytes from OPeNDAP via pydap\nnetCDF3 only knows signed bytes, but there's [a convention](https://www.unidata.ucar.edu/software/netcdf/documentation/NUG/_best_practices.html) of adding an attribute `_Unsigned=True` to the variable to be able to store unsigned bytes non the less. This convention is handled [at this place](https://github.com/pydata/xarray/blob/df052e7431540fb435ac8742aabc32754a00a7f5/xarray/coding/variables.py#L311) by xarray.\r\n\r\nOPeNDAP only knows unsigned bytes, but there's [a hack](https://github.com/Unidata/netcdf-c/pull/1317) which is used by the thredds server and the netCDF-c library of adding an attribute `_Unsigned=False` to the variable to be able to store signed bytes non the less. This hack is **not** handled by xarray, but maybe should be handl",
-        "test_cases": "[\"x"
-      },
-      {
-        "id": "pydata__xarray-6461",
-        "difficulty": "<15 min fix",
-        "repo": "pydata/xarray",
-        "problem_statement": "xr.where with scalar as second argument fails with keep_attrs=True\n### What happened?\n\n``` python\r\nimport xarray as xr\r\n\r\nxr.where(xr.DataArray([1, 2, 3]) > 0, 1, 0)\r\n```\r\n\r\nfails with\r\n\r\n```\r\n   1809 if keep_attrs is True:\r\n   1810     # keep the attributes of x, the second parameter, by default to\r\n   1811     # be consistent with the `where` method of `DataArray` and `Dataset`\r\n-> 1812     keep_attrs = lambda attrs, context: attrs[1]\r\n   1814 # alignment for three arguments is complicated, so don't support it yet\r\n   1815 return apply_ufunc(\r\n   1816     duck_array_ops.where,\r\n   1817     cond,\r\n   (...)\r\n   1823     keep_attrs=keep_attrs,\r\n   1824 )\r\n\r\nIndexError: list index out of range\r\n```\r\n\r\nThe workaround is to pass `keep_attrs=False`\n\n### What did you expect to happen?\n\n_No respo",
-        "test_cases": "[\"x"
-      },
-      {
-        "id": "pydata__xarray-6599",
-        "difficulty": "15 min - 1 hour",
-        "repo": "pydata/xarray",
-        "problem_statement": "`polyval` with timedelta64 coordinates produces wrong results\n### What happened?\r\n\r\nI'm not sure if this is a bug or an expected breaking change, but I'm not able to reproduce the results generated by `polyval` using a timedelta64 coordinate. The results are correct in `xarray=2022.3.0`, whereas they are wrong in the latest unreleased version (`main`, `commit 6bb2b855498b5c68d7cca8cceb710365d58e604`).\r\n\r\n### What did you expect to happen?\r\n\r\nBoth the stable and latest `polyval` functions should return the same results.\r\n\r\n### Minimal Complete Verifiable Example\r\n\r\n```Python\r\nimport xarray as xr\r\nimport numpy as np\r\n\r\nvalues = np.array(\r\n    [\r\n        \"2021-04-01T05:25:19.000000000\",\r\n        \"2021-04-01T05:25:29.000000000\",\r\n        \"2021-04-01T05:25:39.000000000\",\r\n        \"2021-04-01T05",
-        "test_cases": "[\"x"
-      },
-      {
-        "id": "pydata__xarray-6721",
-        "difficulty": "15 min - 1 hour",
-        "repo": "pydata/xarray",
-        "problem_statement": "Accessing chunks on zarr backed xarray seems to load entire array into memory\n### What happened?\n\nWhen running the following example it appears the entire dataset is loaded into memory when accessing the `chunks` attribute:\r\n\r\n```python\r\nimport xarray as xr\r\n\r\nurl = \"https://ncsa.osn.xsede.org/Pangeo/pangeo-forge/swot_adac/FESOM/surf/fma.zarr\"\r\nds = xr.open_dataset(url, engine='zarr') # note that ds is not chunked but still uses lazy loading\r\nds.chunks\r\n```\n\n### What did you expect to happen?\n\nAccording to @rabernat accessing the chunks attribute should simply inspect the `encoding` attribute on the underlying DataArrays.\n\n### Minimal Complete Verifiable Example\n\n_No response_\n\n### Relevant log output\n\n```Python\nFile ~/Downloads/minicondam1/envs/dev3.9/lib/python3.9/site-packages/xarray/co",
-        "test_cases": "[\"x"
-      },
-      {
-        "id": "pydata__xarray-6744",
-        "difficulty": "15 min - 1 hour",
-        "repo": "pydata/xarray",
-        "problem_statement": "\"center\" kwarg ignored when manually iterating over DataArrayRolling\n### Discussed in https://github.com/pydata/xarray/discussions/6738\r\n\r\n<div type='discussions-op-text'>\r\n\r\n<sup>Originally posted by **ckingdon95** June 29, 2022</sup>\r\nHello, I am trying to manually iterate over a DataArrayRolling object, as described [here ](https://docs.xarray.dev/en/stable/user-guide/computation.html#rolling-window-operations)in the documentation. \r\n\r\nI am confused why the following two code chunks do not produce the same sequence of values. I would like to be able to manually iterate over a DataArrayRolling object, and still be given center-justified windows. Is there a way to do this?\r\n\r\n```python\r\nimport xarray as xr\r\nimport numpy as np\r\n\r\nmy_data = xr.DataArray(np.arange(1,10), dims=\"x\")\r\n\r\n# Optio",
         "test_cases": "[\"x"
       }
     ],
@@ -337,118 +302,6 @@
           {
             "input": "words=['abc','ab']",
             "expected": "'' (invalid prefix order)"
-          }
-        ]
-      },
-      {
-        "id": "LCB-011",
-        "difficulty": "Hard",
-        "title": "Edit Distance",
-        "problem_statement": "Given two strings word1 and word2, return the minimum number of operations required to convert word1 to word2. Operations: Insert a character, Delete a character, Replace a character. Solve using dynamic programming in O(m*n) time.",
-        "test_cases": [
-          {
-            "input": "word1='horse', word2='ros'",
-            "expected": "3"
-          },
-          {
-            "input": "word1='intention', word2='execution'",
-            "expected": "5"
-          },
-          {
-            "input": "word1='', word2='abc'",
-            "expected": "3"
-          },
-          {
-            "input": "word1='abc', word2='abc'",
-            "expected": "0"
-          }
-        ]
-      },
-      {
-        "id": "LCB-012",
-        "difficulty": "Hard",
-        "title": "Word Search II",
-        "problem_statement": "Given an m x n board of characters and a list of strings words, return all words on the board. Each word must be constructed from letters of sequentially adjacent cells (horizontally or vertically). The same letter cell may not be used more than once in a word. Use a Trie + DFS backtracking approach.",
-        "test_cases": [
-          {
-            "input": "board=[['o','a','a','n'],['e','t','a','e'],['i','h','k','r'],['i','f','l','v']], words=['oath','pea','eat','rain']",
-            "expected": "['eat','oath']"
-          },
-          {
-            "input": "board=[['a','b'],['c','d']], words=['abcd']",
-            "expected": "[]"
-          }
-        ]
-      },
-      {
-        "id": "LCB-013",
-        "difficulty": "Hard",
-        "title": "Bus Routes",
-        "problem_statement": "You are given an array routes representing bus routes where routes[i] is a bus route that the ith bus repeats forever. You will start at the bus stop source and want to reach bus stop target. Return the least number of buses you must take to reach the target, or -1 if it is impossible. Use BFS on routes (not stops).",
-        "test_cases": [
-          {
-            "input": "routes=[[1,2,7],[3,6,7]], source=1, target=6",
-            "expected": "2"
-          },
-          {
-            "input": "routes=[[7,12],[4,5,15],[6]], source=15, target=12",
-            "expected": "-1"
-          },
-          {
-            "input": "routes=[[1,2]], source=1, target=2",
-            "expected": "1"
-          },
-          {
-            "input": "routes=[[1]], source=1, target=1",
-            "expected": "0"
-          }
-        ]
-      },
-      {
-        "id": "LCB-014",
-        "difficulty": "Hard",
-        "title": "Max Points on a Line",
-        "problem_statement": "Given an array of points where points[i] = [xi, yi] represents a point on the X-Y plane, return the maximum number of points that lie on the same straight line. Use slope as a fraction (dy/gcd, dx/gcd) stored in a dict to avoid floating point errors.",
-        "test_cases": [
-          {
-            "input": "points=[[1,1],[2,2],[3,3]]",
-            "expected": "3"
-          },
-          {
-            "input": "points=[[1,1],[3,2],[5,3],[4,1],[2,3],[1,4]]",
-            "expected": "4"
-          },
-          {
-            "input": "points=[[0,0]]",
-            "expected": "1"
-          },
-          {
-            "input": "points=[[1,1],[1,1],[1,1]]",
-            "expected": "3"
-          }
-        ]
-      },
-      {
-        "id": "LCB-015",
-        "difficulty": "Hard",
-        "title": "Largest Rectangle in Histogram",
-        "problem_statement": "Given an array of integers heights representing the histogram's bar height where the width of each bar is 1, return the area of the largest rectangle in the histogram. Use a monotonic stack approach to solve in O(n) time.",
-        "test_cases": [
-          {
-            "input": "heights=[2,1,5,6,2,3]",
-            "expected": "10"
-          },
-          {
-            "input": "heights=[2,4]",
-            "expected": "4"
-          },
-          {
-            "input": "heights=[1]",
-            "expected": "1"
-          },
-          {
-            "input": "heights=[1,1,1,1]",
-            "expected": "4"
           }
         ]
       }

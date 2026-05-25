@@ -2,8 +2,8 @@
 llm_client.py — Multi-provider LLM client with automatic failover.
 
 Provider / model chain (auto-detected, tried in order):
-  1. Groq primary   — GROQ_API_KEY + llama-3.3-70b-versatile  (100k TPD)
-  2. Groq fallback  — GROQ_API_KEY + llama-3.1-8b-instant      (500k TPD)
+  1. Groq primary   — GROQ_API_KEY + llama-3.3-70b-versatile  (100k TPD, 70B params)
+  2. Groq fallback  — GROQ_API_KEY + mixtral-8x7b-32768        (500k TPD, 46.7B MoE)
   3. Gemini         — GEMINI_API_KEY / GOOGLE_API_KEY          (1.5M TPD free)
   4. Vertex AI      — GOOGLE_GENAI_USE_VERTEXAI=TRUE + GCLOUD_ACCESS_TOKEN
 
@@ -28,8 +28,8 @@ MAX_RETRIES = 7
 RETRY_BASE_WAIT = 5
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-DEFAULT_GROQ_PRIMARY_MODEL   = "llama-3.3-70b-versatile"   # 100k TPD
-DEFAULT_GROQ_FALLBACK_MODEL  = "llama-3.1-8b-instant"       # 500k TPD
+DEFAULT_GROQ_PRIMARY_MODEL    = "llama-3.3-70b-versatile"  # 100k TPD, 70B params
+DEFAULT_GROQ_FALLBACK_MODEL   = "mixtral-8x7b-32768"        # 500k TPD, 46.7B params MoE
 DEFAULT_GEMINI_FALLBACK_MODEL = "gemini-2.0-flash"
 
 
