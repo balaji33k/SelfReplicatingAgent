@@ -102,8 +102,11 @@ class LLMClient:
             max_retries=2,   # only for transient network errors; 429 handled below
         )
         self._api_key = api_key
-        # Track which fallback models have already been exhausted this session
-        self._exhausted_models: set = set()
+        # Track which fallback models have already been exhausted this session.
+        # Two separate buckets so the dashboard can show different colours.
+        self._exhausted_models: set = set()   # merged set used by retry loop
+        self._tpd_exhausted: set = set()      # ran out of daily tokens
+        self._unavailable: set = set()        # 404 / decommissioned
 
         # ── Token usage tracking (resets daily) ──────────────────────────────
         self._usage_date: str = datetime.date.today().isoformat()
@@ -119,12 +122,15 @@ class LLMClient:
             else gen_dir.parent
         )
         self._token_file = project_root / "data" / "token_usage.json"
+        self._status_file = project_root / "data" / "model_status.json"
 
         logger.info(
             f"[llm_client] ChatGroq initialised — "
             f"model={config.model_name} temperature={config.temperature} "
             f"budget={self._limits['tpd']:,} TPD / {self._limits['tpm']:,} TPM"
         )
+        # Write initial status so the dashboard shows the active model immediately
+        self._flush_model_status()
 
     # ── Public interface ──────────────────────────────────────────────────────
 
@@ -217,6 +223,8 @@ class LLMClient:
                         else:
                             # TPD (per-day) exhausted — switch to next fallback
                             self._exhausted_models.add(current_model)
+                            self._tpd_exhausted.add(current_model)
+                            self._flush_model_status()
                             logger.warning(
                                 f"[llm_client] TPD exhausted on {current_model} "
                                 f"(retry in {retry_sec:.0f}s) — switching fallback"
@@ -227,6 +235,8 @@ class LLMClient:
                     elif is_unavailable:
                         bad_model = self.config.model_name
                         self._exhausted_models.add(bad_model)
+                        self._unavailable.add(bad_model)
+                        self._flush_model_status()
                         logger.warning(
                             f"[llm_client] Model {bad_model} unavailable/decommissioned — "
                             f"switching to next fallback"
@@ -314,6 +324,7 @@ class LLMClient:
                 f"[llm_client] ✓ Switched model: {old_model} → {model_name} "
                 f"(budget: {self._limits['tpd']:,} TPD / {self._limits['tpm']:,} TPM)"
             )
+            self._flush_model_status()
             return True
         except Exception as e:
             logger.error(f"[llm_client] Failed to switch to {model_name}: {e}")
@@ -399,3 +410,27 @@ class LLMClient:
 
         except Exception as exc:
             logger.debug(f"[llm_client] token_usage flush error (non-fatal): {exc}")
+
+    def _flush_model_status(self) -> None:
+        """
+        Write data/model_status.json so the dashboard can show per-model availability.
+
+        Schema:
+          active      — model currently being used
+          all_models  — ordered fallback list
+          tpd_exhausted — models that hit their daily token limit
+          unavailable   — models that returned 404 / decommissioned
+          last_updated  — ISO timestamp
+        """
+        try:
+            data = {
+                "active":        self.config.model_name,
+                "all_models":    _FALLBACK_ORDER,
+                "tpd_exhausted": sorted(self._tpd_exhausted),
+                "unavailable":   sorted(self._unavailable),
+                "last_updated":  datetime.datetime.utcnow().isoformat() + "Z",
+            }
+            self._status_file.parent.mkdir(parents=True, exist_ok=True)
+            self._status_file.write_text(json.dumps(data, indent=2))
+        except Exception as exc:
+            logger.debug(f"[llm_client] model_status flush error (non-fatal): {exc}")

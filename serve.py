@@ -277,6 +277,7 @@ def _clear_volatile_data():
     VOLATILE_DATA = [
         "heartbeat.json", "evolution_log.json",
         "token_usage.json", "benchmark_matrix.json",
+        "model_status.json",
     ]
     data_dir = ROOT / "data"
     data_dir.mkdir(exist_ok=True)

@@ -469,38 +469,45 @@
       <div class="card-title">⚙️ Evolution Controls</div>
       <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">
 
-        <!-- Model selector -->
-        <div style="flex:1;min-width:220px">
-          <div style="font-size:.65rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">
+        <!-- Custom model picker -->
+        <div style="flex:1;min-width:260px">
+          <div style="font-size:.65rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">
             Groq Model (free tier)
           </div>
-          <select id="model-select" style="
-            width:100%;background:rgba(0,243,255,.06);border:1px solid rgba(0,243,255,.3);
-            border-radius:8px;color:#e0e0e0;padding:8px 12px;font-size:.8rem;
-            font-family:inherit;cursor:pointer;outline:none">
-            <option value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B — 500k TPD / 30k TPM</option>
-            <option value="llama-3.1-8b-instant">Llama 3.1 8B Instant — 500k TPD / 20k TPM</option>
-            <option value="llama-3.3-70b-versatile">Llama 3.3 70B Versatile — 100k TPD / 12k TPM</option>
-            <option value="deepseek-r1-distill-llama-70b">DeepSeek R1 Llama 70B — 500k TPD / 30k TPM</option>
-            <option value="deepseek-r1-distill-qwen-32b">DeepSeek R1 Qwen 32B — 500k TPD / 30k TPM</option>
-            <option value="qwen-qwq-32b">Qwen QwQ 32B — 500k TPD / 30k TPM</option>
-          </select>
+          <!-- Trigger button -->
+          <div id="model-picker-btn" onclick="toggleModelPicker()" style="
+            display:flex;align-items:center;justify-content:space-between;
+            background:rgba(0,243,255,.06);border:1px solid rgba(0,243,255,.3);
+            border-radius:8px;color:#e0e0e0;padding:9px 13px;font-size:.8rem;
+            cursor:pointer;user-select:none;gap:8px">
+            <span id="model-picker-label" style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              — select model —
+            </span>
+            <span style="color:var(--dim);font-size:.7rem">▾</span>
+          </div>
+          <!-- Dropdown panel -->
+          <div id="model-picker-panel" style="
+            display:none;position:absolute;z-index:999;
+            background:#0d0e20;border:1px solid rgba(0,243,255,.25);
+            border-radius:10px;margin-top:4px;min-width:340px;
+            box-shadow:0 8px 32px rgba(0,0,0,.6);overflow:hidden">
+            <div id="model-picker-list"></div>
+          </div>
         </div>
 
         <!-- Buttons -->
         <div style="display:flex;gap:10px;flex-shrink:0">
           <button id="btn-set-model" onclick="setModel()" style="
             background:rgba(0,243,255,.1);border:1px solid rgba(0,243,255,.4);
-            color:#00f3ff;border-radius:8px;padding:8px 18px;font-size:.78rem;
+            color:#00f3ff;border-radius:8px;padding:9px 18px;font-size:.78rem;
             font-family:inherit;cursor:pointer;transition:.2s"
             onmouseover="this.style.background='rgba(0,243,255,.2)'"
             onmouseout="this.style.background='rgba(0,243,255,.1)'">
             💾 Apply Model
           </button>
-
           <button id="btn-restart" onclick="restartEvolution()" style="
             background:rgba(255,0,255,.08);border:1px solid rgba(255,0,255,.35);
-            color:#ff00ff;border-radius:8px;padding:8px 18px;font-size:.78rem;
+            color:#ff00ff;border-radius:8px;padding:9px 18px;font-size:.78rem;
             font-family:inherit;cursor:pointer;transition:.2s"
             onmouseover="this.style.background='rgba(255,0,255,.18)'"
             onmouseout="this.style.background='rgba(255,0,255,.08)'">
@@ -510,7 +517,7 @@
 
         <!-- Status message -->
         <div id="ctrl-status" style="
-          width:100%;font-size:.72rem;min-height:18px;padding-top:4px;
+          width:100%;font-size:.72rem;min-height:18px;padding-top:2px;
           transition:color .3s"></div>
       </div>
     </div>
@@ -640,23 +647,120 @@
 
 <script>
 /* ── Evolution Controls ─────────────────────────────────────────────────── */
-function setCtrlStatus(msg, color){
+var _GROQ_MODELS=[
+  {id:'meta-llama/llama-4-scout-17b-16e-instruct', name:'Llama 4 Scout 17B',      tpd:'500k',tpm:'30k'},
+  {id:'llama-3.1-8b-instant',                       name:'Llama 3.1 8B Instant',   tpd:'500k',tpm:'20k'},
+  {id:'llama-3.3-70b-versatile',                    name:'Llama 3.3 70B Versatile',tpd:'100k',tpm:'12k'},
+  {id:'deepseek-r1-distill-llama-70b',              name:'DeepSeek R1 Llama 70B',  tpd:'500k',tpm:'30k'},
+  {id:'deepseek-r1-distill-qwen-32b',               name:'DeepSeek R1 Qwen 32B',   tpd:'500k',tpm:'30k'},
+  {id:'qwen-qwq-32b',                               name:'Qwen QwQ 32B',           tpd:'500k',tpm:'30k'},
+];
+var _selectedModel='';
+
+function setCtrlStatus(msg,color){
   var el=document.getElementById('ctrl-status');
-  if(el){el.textContent=msg; el.style.color=color||'#00f3ff';}
+  if(el){el.textContent=msg;el.style.color=color||'#00f3ff';}
+}
+
+/* Build and show the custom model dropdown with live status badges */
+function renderModelPicker(){
+  var ms=STATE.modelStatus||{};
+  var active=ms.active||'';
+  var exhausted=ms.tpd_exhausted||[];
+  var unavailable=ms.unavailable||[];
+
+  var list=document.getElementById('model-picker-list');
+  if(!list)return;
+  var html='';
+  _GROQ_MODELS.forEach(function(m){
+    var isActive=(m.id===active);
+    var isExhausted=(exhausted.indexOf(m.id)>=0);
+    var isUnavail=(unavailable.indexOf(m.id)>=0);
+    var isSelected=(m.id===_selectedModel);
+
+    // Status dot + label
+    var dot,statusText,dotColor;
+    if(isUnavail){
+      dot='✕'; dotColor='#64748b'; statusText='decommissioned';
+    } else if(isExhausted){
+      dot='●'; dotColor='#ff3131'; statusText='TPD exhausted';
+    } else if(isActive){
+      dot='●'; dotColor='#39ff14'; statusText='active';
+    } else {
+      dot='●'; dotColor='#39ff14'; statusText='available';
+    }
+
+    var bg=isSelected?'rgba(0,243,255,.12)':'transparent';
+    var opacity=isUnavail?'0.45':'1';
+
+    html+='<div onclick="selectModel(\''+m.id+'\')" style="'+
+      'display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;'+
+      'opacity:'+opacity+';background:'+bg+';transition:.15s;'+
+      'border-bottom:1px solid rgba(255,255,255,.05)"'+
+      ' onmouseover="this.style.background=\'rgba(0,243,255,.08)\'"'+
+      ' onmouseout="this.style.background=\''+bg+'\'"'+
+      '>';
+    // Status dot
+    html+='<span style="color:'+dotColor+';font-size:.9rem;flex-shrink:0">'+dot+'</span>';
+    // Model name + status
+    html+='<div style="flex:1;min-width:0">';
+    html+='<div style="font-size:.78rem;color:#e0e0e0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
+      m.name+(isActive?' <span style="font-size:.62rem;color:#39ff14;border:1px solid rgba(57,255,20,.3);padding:1px 5px;border-radius:4px">ACTIVE</span>':'')+
+      '</div>';
+    html+='<div style="font-size:.62rem;color:';
+    html+=isUnavail?'#64748b':isExhausted?'#ff3131':'#64748b';
+    html+='">'+m.tpd+' TPD / '+m.tpm+' TPM';
+    if(isExhausted)html+=' — <span style="color:#ff3131">exhausted</span>';
+    if(isUnavail)html+=' — <span style="color:#64748b">unavailable</span>';
+    html+='</div></div>';
+    html+='</div>';
+  });
+  list.innerHTML=html;
+}
+
+function toggleModelPicker(){
+  var panel=document.getElementById('model-picker-panel');
+  if(!panel)return;
+  if(panel.style.display==='none'){
+    renderModelPicker();
+    panel.style.display='block';
+    // Close on outside click
+    setTimeout(function(){
+      document.addEventListener('click',closePicker,{once:true,capture:true});
+    },0);
+  } else {
+    panel.style.display='none';
+  }
+}
+
+function closePicker(e){
+  var panel=document.getElementById('model-picker-panel');
+  var btn=document.getElementById('model-picker-btn');
+  if(panel&&btn&&!panel.contains(e.target)&&!btn.contains(e.target)){
+    panel.style.display='none';
+  }
+}
+
+function selectModel(id){
+  _selectedModel=id;
+  var m=_GROQ_MODELS.find(function(x){return x.id===id;})||{name:id};
+  var lbl=document.getElementById('model-picker-label');
+  if(lbl)lbl.textContent=m.name;
+  var panel=document.getElementById('model-picker-panel');
+  if(panel)panel.style.display='none';
+  setCtrlStatus('Model "'+m.name+'" selected — click Apply to save.','#ffb300');
 }
 
 async function setModel(){
-  var sel=document.getElementById('model-select');
-  var model=sel?sel.value:'';
-  if(!model){setCtrlStatus('No model selected','#ff3131');return;}
-  setCtrlStatus('Saving model…','#ffb300');
+  if(!_selectedModel){setCtrlStatus('Please select a model first.','#ff3131');return;}
+  setCtrlStatus('Saving…','#ffb300');
   try{
     var r=await fetch('/api/config',{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'set_model',model:model})});
+      body:JSON.stringify({action:'set_model',model:_selectedModel})});
     var d=await r.json();
     if(d.ok){
-      setCtrlStatus('✓ Model set to '+model+'. Restart to apply.','#39ff14');
+      setCtrlStatus('✓ Model saved. Click "Start Fresh" to apply it.','#39ff14');
     } else {
       setCtrlStatus('Error: '+(d.error||'unknown'),'#ff3131');
     }
@@ -666,14 +770,14 @@ async function setModel(){
 async function restartEvolution(){
   var btn=document.getElementById('btn-restart');
   if(btn)btn.disabled=true;
-  setCtrlStatus('Sending restart…','#ffb300');
+  setCtrlStatus('Restarting evolution…','#ffb300');
   try{
     var r=await fetch('/api/config',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'restart'})});
     var d=await r.json();
     if(d.ok){
-      setCtrlStatus('✓ '+d.message+' Dashboard will refresh shortly.','#00f3ff');
+      setCtrlStatus('✓ Evolution restarting — dashboard refreshing…','#00f3ff');
       setTimeout(function(){if(btn)btn.disabled=false;},8000);
     } else {
       setCtrlStatus('Error: '+(d.error||'unknown'),'#ff3131');
@@ -685,18 +789,28 @@ async function restartEvolution(){
   }
 }
 
-/* Sync model selector with current token_usage model on page load */
+/* Sync picker label & status with live model_status.json */
 function syncModelSelector(){
-  var tu=STATE.tokenUsage;
-  if(!tu||!tu.model)return;
-  var sel=document.getElementById('model-select');
-  if(sel){sel.value=tu.model;}
+  var ms=STATE.modelStatus||{};
+  var active=ms.active||'';
+  if(!active)return;
+  // Update label if user hasn't manually chosen something different
+  var lbl=document.getElementById('model-picker-label');
+  if(lbl&&!_selectedModel){
+    var m=_GROQ_MODELS.find(function(x){return x.id===active;});
+    lbl.textContent=m?m.name:active;
+    _selectedModel=active;
+  }
+  // Re-render open panel if visible
+  var panel=document.getElementById('model-picker-panel');
+  if(panel&&panel.style.display!=='none')renderModelPicker();
 }
 
 /* ── Main State ─────────────────────────────────────────────────────────── */
 var STATE={heartbeat:null,evolutionLog:[],benchmarkMatrix:null,activeGen:null,
   genProgress:{},    // gen_num → {task_list, results, descriptions}
   tokenUsage:null,   // data/token_usage.json content
+  modelStatus:null,  // data/model_status.json content
   collapsed:new Set(),   // gens collapsed by user or auto
   userExpanded:new Set(), // gens user explicitly opened
   activeTab:'summary',   // 'summary' | 'code'
@@ -716,12 +830,14 @@ async function refresh(){
     loadJSON('data/heartbeat.json'),
     loadJSON('data/evolution_log.json'),
     loadJSON('data/benchmark_matrix.json'),
-    loadJSON('data/token_usage.json')
+    loadJSON('data/token_usage.json'),
+    loadJSON('data/model_status.json')
   ]);
   if(results[0])STATE.heartbeat=results[0];
   if(results[1])STATE.evolutionLog=Array.isArray(results[1])?results[1]:[];
   if(results[2])STATE.benchmarkMatrix=results[2];
   if(results[3])STATE.tokenUsage=results[3];
+  if(results[4])STATE.modelStatus=results[4];
 
   // Load progress for all known gens
   var knownGens=getKnownGens();
