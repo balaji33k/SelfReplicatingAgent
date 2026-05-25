@@ -196,9 +196,9 @@ PARENT VERSION (first 400 chars — DO NOT COPY, only use as structural referenc
 REQUIREMENTS:
 - File: {fname}  Generation: {next_gen}
 - Fix the failures described above that this file is responsible for
-- Use GROQ_API_KEY env var (not GEMINI_API_KEY) for the LLM client
-- llm_client must support Groq API (OpenAI-compatible: POST https://api.groq.com/openai/v1/chat/completions)
-- Default model: llama-3.3-70b-versatile
+- The LLMClient is imported from llm_client.py (already provided — do NOT regenerate it)
+- LLMClient auto-detects provider from env: GROQ_API_KEY (primary), GEMINI_API_KEY (fallback on 429)
+- Default Groq model: llama-3.3-70b-versatile
 - Every agent file must own its prompt internally (not rely on external prompt files)
 - Keep the same data contracts (TaskContract, AnalysisSpec, CodeArtifact, etc.)
 
