@@ -810,16 +810,15 @@ async function restartEvolution(){
 function syncModelSelector(){
   var ms=STATE.modelStatus||{};
   var active=ms.active||'';
-  if(!active)return;
   // Auto-select active model if user hasn't chosen manually
-  if(!_selectedModel){
+  if(active&&!_selectedModel){
     _selectedModel=active;
   }
-  // Always refresh options + hint (status may have changed)
+  // Always populate options regardless of whether system is running
   renderModelPicker();
   // Keep the <select> element in sync with _selectedModel
   var sel=document.getElementById('model-picker-select');
-  if(sel&&sel.value!==_selectedModel)sel.value=_selectedModel;
+  if(sel&&_selectedModel&&sel.value!==_selectedModel)sel.value=_selectedModel;
 }
 
 /* ── Main State ─────────────────────────────────────────────────────────── */
