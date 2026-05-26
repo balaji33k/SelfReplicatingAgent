@@ -40,8 +40,8 @@ logger = logging.getLogger(__name__)
 # ── Ollama (local, no rate limits) ───────────────────────────────────────────
 # Set OLLAMA_BASE_URL to enable. Falls back to Groq/Gemini if not reachable.
 _OLLAMA_BASE_URL  = os.getenv("OLLAMA_BASE_URL", "")   # e.g. http://localhost:11434
-_OLLAMA_MODEL     = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:14b")
-_OLLAMA_CALL_TIMEOUT = 120  # local inference can be slow on CPU
+_OLLAMA_MODEL     = os.getenv("OLLAMA_MODEL", "qwen3:14b")
+_OLLAMA_CALL_TIMEOUT = 180  # Qwen3 thinking mode can take longer; 3 min cap
 
 # ── Groq models (confirmed working on free tier) ──────────────────────────────
 _GROQ_LIMITS: Dict[str, Dict[str, int]] = {
@@ -258,14 +258,43 @@ class LLMClient:
 
     # ── Retry / fallback logic ────────────────────────────────────────────────
 
+    def _qwen3_inject_mode(self, lc_messages, agent_name: str):
+        """
+        Qwen3 has a built-in thinking mode controlled by /think or /no_think prefix.
+        - Analyst, Architect, MetaArchitect → /think  (deep reasoning needed)
+        - Coder, Critic, Reviser, Debugger  → /no_think (fast code output)
+        - All others                         → /no_think (safe default)
+        Strips the tag from the response before returning.
+        """
+        _THINK_AGENTS    = {"analyst", "architect", "meta_architect", "evolution_engine"}
+        _NO_THINK_AGENTS = {"coder", "critic", "reviser", "debugger", "test_writer", "executor"}
+        use_think = agent_name.lower() in _THINK_AGENTS
+
+        prefix = "/think\n" if use_think else "/no_think\n"
+        patched = []
+        for msg in lc_messages:
+            if isinstance(msg, HumanMessage) and not msg.content.startswith("/think"):
+                patched.append(HumanMessage(content=prefix + msg.content))
+            else:
+                patched.append(msg)
+        return patched
+
     def _invoke_with_retry(self, lc_messages, agent_name: str) -> str:
         # ── Ollama fast-path: no rate limits, no fallback chain needed ─────────
         if self._use_ollama:
+            # Inject /think or /no_think for Qwen3 models
+            if self._ollama_model.startswith("qwen3"):
+                lc_messages = self._qwen3_inject_mode(lc_messages, agent_name)
             for attempt in range(3):
                 try:
                     def _llm_call(llm, msgs):
                         resp = llm.invoke(msgs)
-                        return resp.content, resp
+                        # Strip Qwen3 <think>...</think> block from output
+                        content = resp.content
+                        import re as _re
+                        content = _re.sub(r'<think>.*?</think>', '', content,
+                                          flags=_re.DOTALL).strip()
+                        return content, resp
                     _ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
                     _fut = _ex.submit(_llm_call, self._llm, lc_messages)
                     try:
