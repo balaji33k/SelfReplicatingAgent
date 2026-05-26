@@ -1,9 +1,10 @@
 """
-llm_client.py — Multi-provider LLM client (Groq + Google Gemini).
+llm_client.py — Multi-provider LLM client (Ollama + Groq + Google Gemini).
 
 Provider priority:
-  1. Groq (GROQ_API_KEY)   — llama-4-scout → llama-3.1-8b → llama-3.3-70b
-  2. Gemini (GEMINI_API_KEY) — gemini-2.0-flash → gemini-1.5-flash → gemini-1.5-flash-8b
+  0. Ollama (OLLAMA_BASE_URL set)  — local model, no rate limits, highest priority
+  1. Groq (GROQ_API_KEY)           — llama-4-scout → llama-3.1-8b → llama-3.3-70b
+  2. Gemini (GEMINI_API_KEY)       — gemini-2.0-flash → gemini-2.0-flash-lite
      Auto-activated when all Groq models are exhausted.
 
 Rate-limit handling:
@@ -11,9 +12,14 @@ Rate-limit handling:
   TPD limit (long wait  >15 min) → switch to next model in chain.
   All Groq exhausted + Gemini key present → switch to Gemini provider.
   All providers exhausted → wait 30 min, reset, retry.
+  Ollama: no rate limits — retried on connection error only.
 
 Token tracking written to data/token_usage.json after every call.
 Model status (active, exhausted, unavailable) written to data/model_status.json.
+
+Ollama setup (Google Colab / local):
+  export OLLAMA_BASE_URL=http://localhost:11434
+  export OLLAMA_MODEL=qwen2.5-coder:14b   # optional, defaults below
 """
 import concurrent.futures
 import datetime
@@ -30,6 +36,12 @@ from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 
 logger = logging.getLogger(__name__)
+
+# ── Ollama (local, no rate limits) ───────────────────────────────────────────
+# Set OLLAMA_BASE_URL to enable. Falls back to Groq/Gemini if not reachable.
+_OLLAMA_BASE_URL  = os.getenv("OLLAMA_BASE_URL", "")   # e.g. http://localhost:11434
+_OLLAMA_MODEL     = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:14b")
+_OLLAMA_CALL_TIMEOUT = 120  # local inference can be slow on CPU
 
 # ── Groq models (confirmed working on free tier) ──────────────────────────────
 _GROQ_LIMITS: Dict[str, Dict[str, int]] = {
@@ -72,6 +84,23 @@ def _is_gemini_model(model_name: str) -> bool:
     return model_name.startswith("gemini")
 
 
+def _is_ollama_model(model_name: str) -> bool:
+    """Model names that route to Ollama — anything not groq/gemini when Ollama is enabled."""
+    return bool(_OLLAMA_BASE_URL) and not _is_gemini_model(model_name) and model_name not in _GROQ_FALLBACK_ORDER
+
+
+def _check_ollama_reachable() -> bool:
+    """Quick TCP probe to see if Ollama server is up."""
+    if not _OLLAMA_BASE_URL:
+        return False
+    try:
+        import urllib.request
+        urllib.request.urlopen(f"{_OLLAMA_BASE_URL}/api/tags", timeout=3)
+        return True
+    except Exception:
+        return False
+
+
 class LLMClient:
     """
     Unified LLM client supporting Groq and Google Gemini.
@@ -91,13 +120,19 @@ class LLMClient:
             or os.getenv("GoogleAPIKey", "")
         )
 
-        if not self._groq_key and not self._gemini_key:
-            raise EnvironmentError("Neither GROQ_API_KEY nor GEMINI_API_KEY is set.")
+        # ── Ollama check (highest priority — overrides all API providers) ──────
+        self._ollama_url   = _OLLAMA_BASE_URL
+        self._ollama_model = _OLLAMA_MODEL
+        self._use_ollama   = bool(self._ollama_url) and _check_ollama_reachable()
 
-        # Hard cap: if a single API call takes longer than this, treat it as a hung
-        # connection and raise so the retry loop can switch models.
-        # Uses concurrent.futures thread timeout — actually enforced unlike client param.
-        self._call_timeout = 30   # 30s max per model attempt — cycle through all 5 faster
+        if not self._use_ollama and not self._groq_key and not self._gemini_key:
+            raise EnvironmentError(
+                "No LLM provider available. Set one of: "
+                "OLLAMA_BASE_URL, GROQ_API_KEY, GEMINI_API_KEY"
+            )
+
+        # Hard cap per model attempt (Ollama gets longer since local GPU is slower)
+        self._call_timeout = _OLLAMA_CALL_TIMEOUT if self._use_ollama else 30
 
         # Track exhausted/unavailable models across both providers
         self._exhausted_models: set = set()
@@ -110,7 +145,13 @@ class LLMClient:
         self._per_agent:    Dict = {}
         self._total_tokens: int  = 0
         self._limits = _ALL_MODEL_LIMITS.get(config.model_name, _DEFAULT_LIMITS)
-        self._provider = "gemini" if _is_gemini_model(config.model_name) else "groq"
+
+        if self._use_ollama:
+            self._provider = "ollama"
+        elif _is_gemini_model(config.model_name):
+            self._provider = "gemini"
+        else:
+            self._provider = "groq"
 
         # Resolve project root
         gen_dir = Path(__file__).resolve().parent
@@ -123,22 +164,49 @@ class LLMClient:
         self._status_file = project_root / "data" / "model_status.json"
 
         # Initialise the LLM backend
-        self._llm = self._build_llm(config.model_name)
+        active_model = self._ollama_model if self._use_ollama else config.model_name
+        self._llm = self._build_llm(active_model)
 
-        logger.info(
-            f"[llm_client] Initialised — provider={self._provider} "
-            f"model={config.model_name} "
-            f"budget={self._limits['tpd']:,} TPD"
-            + (f" / {self._limits['tpm']:,} TPM" if self._provider == "groq" else " / 15 RPM")
-            + (f" | Gemini fallback: {'enabled' if self._gemini_key else 'no key'}")
-        )
+        if self._use_ollama:
+            logger.info(
+                f"[llm_client] Initialised — provider=ollama "
+                f"model={self._ollama_model} url={self._ollama_url} "
+                f"| No rate limits"
+            )
+        else:
+            logger.info(
+                f"[llm_client] Initialised — provider={self._provider} "
+                f"model={config.model_name} "
+                f"budget={self._limits['tpd']:,} TPD"
+                + (f" / {self._limits['tpm']:,} TPM" if self._provider == "groq" else " / 15 RPM")
+                + (f" | Gemini fallback: {'enabled' if self._gemini_key else 'no key'}")
+            )
         self._flush_model_status()
 
     # ── LLM factory ──────────────────────────────────────────────────────────
 
     def _build_llm(self, model_name: str):
         """Build the right LangChain LLM object for the given model name."""
-        if _is_gemini_model(model_name):
+        # ── Ollama (local, OpenAI-compatible API) ─────────────────────────────
+        if self._use_ollama:
+            try:
+                from langchain_openai import ChatOpenAI
+            except ImportError:
+                raise ImportError(
+                    "langchain-openai required for Ollama support: "
+                    "pip install langchain-openai"
+                )
+            return ChatOpenAI(
+                model=self._ollama_model,
+                base_url=f"{self._ollama_url}/v1",
+                api_key="ollama",          # Ollama ignores the key but field is required
+                temperature=self.config.temperature,
+                max_tokens=8192,
+                timeout=_OLLAMA_CALL_TIMEOUT,
+                max_retries=1,
+            )
+        # ── Gemini ────────────────────────────────────────────────────────────
+        elif _is_gemini_model(model_name):
             if not self._gemini_key:
                 raise EnvironmentError(f"GEMINI_API_KEY not set — cannot use {model_name}")
             from langchain_google_genai import ChatGoogleGenerativeAI
@@ -151,6 +219,7 @@ class LLMClient:
                 max_retries=1,
                 transport="rest",  # Force HTTP/REST — gRPC can hang on HF Spaces
             )
+        # ── Groq ──────────────────────────────────────────────────────────────
         else:
             if not self._groq_key:
                 raise EnvironmentError(f"GROQ_API_KEY not set — cannot use {model_name}")
@@ -190,6 +259,44 @@ class LLMClient:
     # ── Retry / fallback logic ────────────────────────────────────────────────
 
     def _invoke_with_retry(self, lc_messages, agent_name: str) -> str:
+        # ── Ollama fast-path: no rate limits, no fallback chain needed ─────────
+        if self._use_ollama:
+            for attempt in range(3):
+                try:
+                    def _llm_call(llm, msgs):
+                        resp = llm.invoke(msgs)
+                        return resp.content, resp
+                    _ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+                    _fut = _ex.submit(_llm_call, self._llm, lc_messages)
+                    try:
+                        content, response = _fut.result(timeout=self._call_timeout)
+                        _ex.shutdown(wait=False)
+                    except concurrent.futures.TimeoutError:
+                        _ex.shutdown(wait=False)
+                        raise TimeoutError(
+                            f"Ollama call timed out after {self._call_timeout}s "
+                            f"(model={self._ollama_model})"
+                        )
+                    # Record usage (best effort — Ollama may not return token counts)
+                    try:
+                        self._record_usage(agent_name, response)
+                    except Exception:
+                        pass
+                    return content
+                except Exception as exc:
+                    err_str = str(exc)
+                    logger.warning(
+                        f"[llm_client] Ollama attempt {attempt+1}/3 failed: {err_str[:120]}"
+                    )
+                    if attempt < 2:
+                        time.sleep(5)
+                    else:
+                        raise RuntimeError(
+                            f"Ollama unreachable after 3 attempts: {err_str}"
+                        ) from exc
+            # Should never reach here
+            raise RuntimeError("Ollama invocation failed unexpectedly")
+
         all_models = self._build_fallback_chain()
 
         for recovery_attempt in range(_MAX_RECOVERY_ATTEMPTS):
