@@ -59,32 +59,27 @@ _SCOUT = "llama-4-scout"   # logical name — each provider has slightly differe
 _CEREBRAS_API_KEY    = os.getenv("CEREBRAS_API_KEY", "")
 _CEREBRAS_BASE_URL   = "https://api.cerebras.ai/v1"
 _CEREBRAS_MODELS     = [
-    "llama-4-scout-17b-16e-instruct",  # ✅ Llama-4-Scout
-    "llama-3.3-70b",                   # fallback if Scout unavailable
+    "llama-4-scout-17b-16e-instruct",  # ✅ Llama-4-Scout only
 ]
 
 # ── Provider 2: SambaNova — 1500 tok/s ───────────────────────────────────────
 _SAMBANOVA_API_KEY   = os.getenv("SAMBANOVA_API_KEY", "")
 _SAMBANOVA_BASE_URL  = "https://api.sambanova.ai/v1"
 _SAMBANOVA_MODELS    = [
-    "Llama-4-Scout-17B-16E-Instruct",  # ✅ Llama-4-Scout
-    "Meta-Llama-3.3-70B-Instruct",     # fallback
+    "Llama-4-Scout-17B-16E-Instruct",  # ✅ Llama-4-Scout only
 ]
 
 # ── Provider 3: OpenRouter — free :free tier ──────────────────────────────────
 _OPENROUTER_API_KEY  = os.getenv("OPENROUTER_API_KEY", "")
 _OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 _OPENROUTER_MODELS   = [
-    "meta-llama/llama-4-scout:free",   # ✅ Llama-4-Scout free
-    "meta-llama/llama-3.3-70b:free",   # fallback
+    "meta-llama/llama-4-scout:free",   # ✅ Llama-4-Scout only
 ]
 
 # ── Provider 4: Groq — rolling TPM limits ────────────────────────────────────
 _GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
 _GROQ_MODELS         = [
-    "meta-llama/llama-4-scout-17b-16e-instruct",  # ✅ Llama-4-Scout
-    "llama-3.3-70b-versatile",                     # fallback
-    "llama-3.1-8b-instant",                        # lightest fallback
+    "meta-llama/llama-4-scout-17b-16e-instruct",  # ✅ Llama-4-Scout only
 ]
 
 # ── Provider 5: Gemini — last resort (Google-only, different ecosystem) ───────
