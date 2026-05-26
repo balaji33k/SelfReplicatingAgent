@@ -280,7 +280,7 @@ def run_generation(gen_config: Config, generation_number: int):
                 "stdout":  (result.stdout or "")[:300],
                 "agents_used": result.agents_used,
                 "agent_failures": result.agent_failures,
-                "code_snippet": (result.final_code or "")[:800],
+                "code_snippet": result.final_code or "",
             }
             _write_progress(generation_number, task_ids, completed_progress, task_descriptions)
 

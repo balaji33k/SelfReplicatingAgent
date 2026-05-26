@@ -890,9 +890,7 @@ function showFailDetail(tid){
   document.getElementById('fd-code').textContent=snippet||'(not captured yet — run in progress)';
   var lbl=document.getElementById('fd-code-lbl');
   if(lbl){
-    if(!snippet) lbl.textContent='';
-    else if(snippet.length>=798) lbl.textContent='— first 800 chars';
-    else lbl.textContent='— '+snippet.split('\n').length+' lines';
+    lbl.textContent=snippet?'— '+snippet.split('\n').length+' lines':'';
   }
   m.style.display='flex';
 }
@@ -962,7 +960,7 @@ setInterval(tick,3000);
   padding:.6rem .8rem;font-family:monospace;font-size:.72rem;color:#e2e8f0;
   white-space:pre-wrap;word-break:break-all;max-height:180px;overflow-y:auto;margin:0}
 .fdm-pre.stderr{border-color:rgba(239,68,68,.2);color:#fca5a5}
-.fdm-pre.code{color:#a5f3fc;max-height:220px}
+.fdm-pre.code{color:#a5f3fc;max-height:520px}
 </style>
 
 <div id="fail-detail-modal" onclick="if(event.target===this)this.style.display='none'">
