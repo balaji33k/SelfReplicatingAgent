@@ -262,24 +262,34 @@ class LLMClient:
                             f"retry_sec={retry_sec:.0f}"
                         )
 
-                        # Gemini-specific: quota errors don't include retry time.
-                        # _parse_retry_seconds returns >900 when unparseable.
-                        # For Gemini, this is almost always an RPM (per-minute) limit
-                        # not a daily limit — sleep one RPM window and retry same model.
-                        is_gemini_rpm = (
+                        # Gemini 429 with no parseable retry time = daily RPD exhausted.
+                        # Old logic slept 65s and retried same model — causing infinite loop
+                        # when quota is gone for the day. Now: switch immediately.
+                        # If retry_sec IS parseable and short → genuine RPM, sleep briefly.
+                        is_gemini_quota = (
                             _is_gemini_model(current_model)
-                            and retry_sec > _MAX_TPM_SLEEP_SEC
                             and ("resource_exhausted" in err_str.lower()
                                  or "quota" in err_str.lower()
                                  or "429" in err_str)
                         )
-                        if is_gemini_rpm:
+                        if is_gemini_quota and retry_sec > _MAX_TPM_SLEEP_SEC:
+                            # No parseable retry time → daily quota exhausted → switch NOW
+                            logger.warning(
+                                f"[llm_client] Gemini daily quota exhausted on {current_model} "
+                                f"— switching to next model immediately"
+                            )
+                            self._exhausted_models.add(current_model)
+                            self._tpd_exhausted.add(current_model)
+                            self._flush_model_status()
+                            if not self._switch_to_next_model():
+                                break
+                        elif is_gemini_quota and retry_sec <= _MAX_TPM_SLEEP_SEC:
+                            # Short parseable wait → genuine RPM limit → sleep and retry
                             logger.warning(
                                 f"[llm_client] Gemini RPM limit on {current_model} — "
-                                f"sleeping {_GEMINI_RPM_SLEEP_SEC}s then retrying"
+                                f"sleeping {retry_sec+5:.0f}s then retrying"
                             )
-                            time.sleep(_GEMINI_RPM_SLEEP_SEC)
-                            # Don't switch — same model, same attempt slot
+                            time.sleep(retry_sec + 5)
                         elif retry_sec <= _MAX_TPM_SLEEP_SEC:
                             sleep_time = retry_sec + 5
                             logger.warning(
