@@ -886,7 +886,14 @@ function showFailDetail(tid){
     Object.keys(af).length?Object.entries(af).map(function(e){return e[0]+': '+e[1];}).join('\n'):'—';
   document.getElementById('fd-stderr').textContent=(r.stderr||'').trim()||'(none)';
   document.getElementById('fd-stdout').textContent=(r.stdout||'').trim()||'(none)';
-  document.getElementById('fd-code').textContent=(r.code_snippet||'').trim()||'(not captured yet — run in progress)';
+  var snippet=(r.code_snippet||'').trim();
+  document.getElementById('fd-code').textContent=snippet||'(not captured yet — run in progress)';
+  var lbl=document.getElementById('fd-code-lbl');
+  if(lbl){
+    if(!snippet) lbl.textContent='';
+    else if(snippet.length>=798) lbl.textContent='— first 800 chars';
+    else lbl.textContent='— '+snippet.split('\n').length+' lines';
+  }
   m.style.display='flex';
 }
 
@@ -978,7 +985,7 @@ setInterval(tick,3000);
       <pre class="fdm-pre" id="fd-stdout"></pre>
     </div>
     <div class="fdm-section">
-      <div class="fdm-section-label">💻 Generated code (first 800 chars)</div>
+      <div class="fdm-section-label">💻 Generated code <span id="fd-code-lbl" style="font-weight:400;text-transform:none;letter-spacing:0"></span></div>
       <pre class="fdm-pre code" id="fd-code"></pre>
     </div>
   </div>
