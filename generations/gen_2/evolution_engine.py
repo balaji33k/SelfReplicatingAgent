@@ -74,8 +74,17 @@ class EvolutionEngine:
     # ── Public API ────────────────────────────────────────────────────────────
 
     def design_next_generation(
-        self, analysis_report: AnalysisReport, parent_config: Config
+        self,
+        analysis_report: AnalysisReport,
+        parent_config: Config,
+        plan_callback=None,
     ) -> NextGenerationDesign:
+        """
+        plan_callback(event, payload) — optional hook so callers can react live:
+          event="plan_ready"   payload={"plan": str, "files_total": int, "failure_summary": dict}
+          event="file_done"    payload={"file": str, "index": int, "total": int}
+          event="all_done"     payload={"files_generated": int}
+        """
         gen_num = parent_config.generation_number
         next_gen = gen_num + 1
         logger.info(f"Designing Generation {next_gen} from failure evidence (one file at a time)...")
@@ -90,6 +99,24 @@ class EvolutionEngine:
         improvement_log = self._get_improvement_plan(failure_ctx, gen_num, next_gen)
         logger.info(f"Improvement plan: {improvement_log[:120]}...")
 
+        # Notify caller as soon as the plan is ready (before any files are generated)
+        if plan_callback:
+            try:
+                plan_callback("plan_ready", {
+                    "plan": improvement_log,
+                    "files_total": len(REQUIRED_FILES),
+                    "failure_summary": {
+                        "pass_rate": analysis_report.pass_rate,
+                        "passed": analysis_report.passed,
+                        "total": analysis_report.total_tasks,
+                        "error_breakdown": analysis_report.failure_breakdown,
+                        "agent_attribution": analysis_report.agent_failure_counts,
+                        "missing_packages": getattr(analysis_report, "missing_packages", []),
+                    },
+                })
+            except Exception:
+                pass
+
         # Phase 2: Generate each file — NO parent code shown, only the plan + stats
         files: Dict[str, str] = {}
         for i, fname in enumerate(REQUIRED_FILES):
@@ -103,6 +130,15 @@ class EvolutionEngine:
                 next_gen=next_gen,
             )
             files[fname] = content
+            if plan_callback:
+                try:
+                    plan_callback("file_done", {
+                        "file": fname,
+                        "index": i + 1,
+                        "total": len(REQUIRED_FILES),
+                    })
+                except Exception:
+                    pass
             if i < len(REQUIRED_FILES) - 1:
                 time.sleep(INTER_FILE_DELAY)
 

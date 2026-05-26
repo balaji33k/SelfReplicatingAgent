@@ -385,6 +385,48 @@ footer{text-align:center;font-size:.6rem;color:#1e293b;padding:8px 0}
   <div id="tgrid-empty" style="padding:20px;text-align:center;color:#1e293b;font-size:.72rem">Loading tasks…</div>
 </div>
 
+<!-- EVOLUTION PLAN -->
+<div class="card" id="evo-plan-card" style="display:none">
+  <div class="ctitle">🧬 Next Generation Plan
+    <span id="evo-plan-badge" style="float:right;font-size:.62rem;padding:2px 10px;border-radius:12px;
+      background:rgba(217,70,239,.12);border:1px solid rgba(217,70,239,.3);color:var(--mag)">PLANNING</span>
+  </div>
+
+  <!-- file progress bar -->
+  <div id="evo-file-progress" style="display:none;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;font-size:.65rem;color:var(--muted);margin-bottom:4px">
+      <span>Generating files for Gen <span id="evo-next-gen">?</span></span>
+      <span id="evo-file-count">0 / 0</span>
+    </div>
+    <div style="height:6px;background:rgba(255,255,255,.04);border-radius:4px;overflow:hidden">
+      <div id="evo-file-bar" style="height:100%;background:linear-gradient(90deg,var(--mag),var(--cyan));
+        border-radius:4px;width:0%;transition:width .5s ease"></div>
+    </div>
+    <div style="margin-top:5px;font-size:.6rem;color:var(--mag);font-family:monospace" id="evo-current-file"></div>
+  </div>
+
+  <!-- failure summary chips -->
+  <div id="evo-fail-summary" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
+
+  <!-- improvement plan text -->
+  <div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">
+    📋 Improvement Plan (LLM-generated)
+  </div>
+  <pre id="evo-plan-text" style="font-size:.72rem;line-height:1.6;color:var(--text);white-space:pre-wrap;
+    background:rgba(217,70,239,.04);border:1px solid rgba(217,70,239,.12);border-radius:8px;
+    padding:12px;max-height:280px;overflow-y:auto;font-family:system-ui,sans-serif">
+    Waiting for evolution engine…
+  </pre>
+
+  <!-- generated files list -->
+  <div id="evo-files-done-wrap" style="display:none;margin-top:12px">
+    <div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">
+      ✅ Files written
+    </div>
+    <div id="evo-files-done" style="display:flex;flex-wrap:wrap;gap:5px"></div>
+  </div>
+</div>
+
 <!-- CONTROLS -->
 <div class="card">
   <div class="ctitle">🎛 Controls</div>
@@ -413,7 +455,7 @@ footer{text-align:center;font-size:.6rem;color:#1e293b;padding:8px 0}
 
 <script>
 /* ────────────────── STATE ────────────────── */
-var S={hb:null,ms:null,prog:null,ri:null,evo:null};
+var S={hb:null,ms:null,prog:null,ri:null,evo:null,eplan:null};
 var _filt='all', _lastTask='', _lastStatus='', _lastModel='', _startedAt=null;
 
 var PHASES=[
@@ -437,13 +479,14 @@ async function tick(){
   var results=await Promise.all([
     get('data/heartbeat.json'), get('data/model_status.json'),
     get('data/gen_1_progress.json'), get('data/run_info.json'),
-    get('data/evolution_log.json'),
+    get('data/evolution_log.json'), get('data/evolution_plan.json'),
   ]);
   if(results[0])S.hb=results[0];
   if(results[1])S.ms=results[1];
   if(results[2])S.prog=results[2];
   if(results[3])S.ri=results[3];
   if(results[4])S.evo=results[4];
+  if(results[5])S.eplan=results[5];
 
   detectEvents();
   renderHero();
@@ -452,6 +495,7 @@ async function tick(){
   renderModels();
   renderTasks();
   renderGenHistory();
+  renderEvoPlan();
 }
 
 /* ────────────────── FEED ────────────────── */
@@ -516,7 +560,7 @@ function renderHero(){
 
   // badge
   var badge=document.getElementById('status-badge');
-  var cm={RUNNING:'sb-run',ANALYSING:'sb-analyse',SPAWNING:'sb-spawn',
+  var cm={RUNNING:'sb-run',ANALYSING:'sb-analyse',EVOLVING:'sb-analyse',SPAWNING:'sb-spawn',
           DONE:'sb-run',STOPPED:'sb-stop',WAITING:'sb-wait',SPAWN_FAILED:'sb-stop'};
   badge.className='sbadge '+(cm[st]||'sb-default');
   var lbl=st||'–';
@@ -567,7 +611,12 @@ function renderHero(){
   // active task
   var atl='';
   if(hb.active_task_id){atl='▶ '+hb.active_task_id;if(hb.current_phase)atl+=' · '+hb.current_phase;}
-  else if(st==='ANALYSING')atl='⚙ Generating Gen '+((hb.active_gen||1)+1)+' code via LLM…';
+  else if(st==='ANALYSING')atl='🧠 Analysing failures → building improvement plan for Gen '+((hb.active_gen||1)+1)+'…';
+  else if(st==='EVOLVING'){
+    var ep=S.eplan;
+    var fd=ep?ep.files_done:0, ft=ep?ep.files_total:18;
+    atl='⚙ Generating Gen '+((hb.active_gen||1)+1)+' files ('+fd+'/'+ft+')…';
+  }
   else if(st==='SPAWNING') atl='🚀 Spawning Gen '+((hb.active_gen||1)+1)+'…';
   else if(st==='DONE')     atl='✅ Generation complete — next generation launching…';
   else if(ri&&ri.status==='stopped')atl='⏹ Stopped — click Start Fresh to resume';
@@ -581,9 +630,10 @@ function renderPhase(){
   var curIdx=PHASE_ORDER.indexOf(cur);
   if(curIdx===-1&&cur)curIdx=0; // unknown phase → treat as first
 
-  // For ANALYSING/SPAWNING override
+  // For ANALYSING/EVOLVING/SPAWNING override
   var override='';
   if(hb.status==='ANALYSING')override='analysing';
+  if(hb.status==='EVOLVING') override='analysing';  // same display as analysing
   if(hb.status==='SPAWNING') override='spawning';
 
   var html='';
@@ -691,6 +741,92 @@ function renderGenHistory(){
       '<div class="gbar-lbl">G'+g.g+'</div>'+
       '</div>';
   }).join('');
+}
+
+/* ────────────────── EVOLUTION PLAN ────────────────── */
+function renderEvoPlan(){
+  var ep=S.eplan;
+  var hb=S.hb;
+  var card=document.getElementById('evo-plan-card');
+  if(!card)return;
+
+  // Show the panel when evolution data exists OR heartbeat is in ANALYSING/EVOLVING/SPAWNING
+  var evolving=(hb&&(hb.status==='ANALYSING'||hb.status==='EVOLVING'||hb.status==='SPAWNING'));
+  var hasData=!!ep;
+  if(!hasData&&!evolving){card.style.display='none';return;}
+  card.style.display='';
+
+  // Badge
+  var badge=document.getElementById('evo-plan-badge');
+  if(badge){
+    var st=ep?ep.status:'planning';
+    var badgeMap={
+      planning:{txt:'⏳ PLANNING…',bg:'rgba(245,158,11,.12)',border:'rgba(245,158,11,.3)',col:'var(--amber)'},
+      generating:{txt:'⚙ GENERATING FILES…',bg:'rgba(217,70,239,.12)',border:'rgba(217,70,239,.3)',col:'var(--mag)'},
+      done:{txt:'✅ FILES READY',bg:'rgba(34,212,90,.1)',border:'rgba(34,212,90,.3)',col:'var(--lime)'},
+    };
+    var b=badgeMap[st]||badgeMap.planning;
+    badge.textContent=b.txt;
+    badge.style.background=b.bg;badge.style.borderColor=b.border;badge.style.color=b.col;
+  }
+
+  // Improvement plan text
+  var planEl=document.getElementById('evo-plan-text');
+  if(planEl){
+    if(ep&&ep.improvement_plan){
+      planEl.textContent=ep.improvement_plan;
+    } else if(evolving){
+      planEl.textContent='⏳ Evolution engine is analysing failures and building the improvement plan…';
+    }
+  }
+
+  // Failure summary chips
+  var fsEl=document.getElementById('evo-fail-summary');
+  if(fsEl&&ep&&ep.failure_summary){
+    var fs=ep.failure_summary;
+    var chips='';
+    var pct=fs.pass_rate!=null?Math.round(fs.pass_rate*100):null;
+    if(pct!=null)
+      chips+='<span style="padding:3px 9px;border-radius:12px;font-size:.62rem;font-weight:700;'+
+        'background:rgba(34,212,90,.1);border:1px solid rgba(34,212,90,.25);color:var(--lime)">'+
+        '✅ '+pct+'% pass rate ('+fs.passed+'/'+fs.total+')</span>';
+    var errs=fs.error_breakdown||{};
+    Object.keys(errs).forEach(function(k){
+      chips+='<span style="padding:3px 9px;border-radius:12px;font-size:.62rem;'+
+        'background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:var(--red)">'+
+        '❌ '+k+': '+errs[k]+'</span>';
+    });
+    var pkgs=(fs.missing_packages||[]);
+    if(pkgs.length)
+      chips+='<span style="padding:3px 9px;border-radius:12px;font-size:.62rem;'+
+        'background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);color:var(--amber)">'+
+        '📦 missing: '+pkgs.join(', ')+'</span>';
+    fsEl.innerHTML=chips;
+  }
+
+  // File generation progress bar
+  var pfWrap=document.getElementById('evo-file-progress');
+  if(pfWrap&&ep&&ep.files_total>0){
+    pfWrap.style.display='';
+    var done=ep.files_done||0, tot=ep.files_total||18;
+    var pct2=Math.round((done/tot)*100);
+    document.getElementById('evo-next-gen').textContent=ep.next_gen||'?';
+    document.getElementById('evo-file-count').textContent=done+' / '+tot;
+    document.getElementById('evo-file-bar').style.width=pct2+'%';
+    var curFile=document.getElementById('evo-current-file');
+    if(curFile)curFile.textContent=ep.status==='done'?'All files generated ✓':(ep.current_file?'Currently writing: '+ep.current_file:'');
+  }
+
+  // Generated files chip list
+  var fDoneWrap=document.getElementById('evo-files-done-wrap');
+  var fDoneEl=document.getElementById('evo-files-done');
+  if(fDoneWrap&&fDoneEl&&ep&&ep.files_list&&ep.files_list.length>0){
+    fDoneWrap.style.display='';
+    fDoneEl.innerHTML=ep.files_list.map(function(f){
+      return '<span style="padding:2px 8px;border-radius:8px;font-size:.6rem;font-family:monospace;'+
+        'background:rgba(34,212,90,.08);border:1px solid rgba(34,212,90,.2);color:var(--lime)">'+f+'</span>';
+    }).join('');
+  }
 }
 
 /* ────────────────── TASKS ────────────────── */
