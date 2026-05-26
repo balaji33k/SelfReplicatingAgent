@@ -33,7 +33,26 @@ logger = logging.getLogger(__name__)
 _GEN_DIR = Path(__file__).resolve().parent
 _PROJECT_ROOT = _GEN_DIR.parent.parent if _GEN_DIR.parent.name == "generations" else _GEN_DIR.parent
 _HEARTBEAT_PATH = _PROJECT_ROOT / "data" / "heartbeat.json"
+_STOP_FLAG      = _PROJECT_ROOT / "data" / "stop.flag"
+_PID_FILE       = _PROJECT_ROOT / "data" / "active_pid.json"
 _GEN_TOPOLOGY: dict = {}  # set once in run_generation, included in every heartbeat write
+
+
+def _register_pid(gen_num: int) -> None:
+    """Write current PID to data/active_pid.json so the dashboard can kill this process."""
+    try:
+        _PID_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _PID_FILE.write_text(json.dumps({"pid": os.getpid(), "gen": gen_num}))
+    except Exception:
+        pass
+
+
+def _check_stop_flag(gen_num: int, done: int, total: int, passed: int, failed: int) -> None:
+    """If data/stop.flag exists, write STOPPED heartbeat and exit cleanly."""
+    if _STOP_FLAG.exists():
+        logger.info("[main] Stop flag detected — halting evolution gracefully.")
+        _write_heartbeat(gen_num, "STOPPED", done, total, passed, failed, "", [])
+        sys.exit(0)
 
 
 def _probe_apis(llm_client, out_path):
@@ -191,11 +210,17 @@ def run_generation(gen_config: Config, generation_number: int):
         first_line = raw.strip().split("\n")[0].strip()
         task_descriptions[t.task_id] = first_line[:80] if first_line else t.task_id
 
+    # Register PID so the dashboard Stop button can kill this process directly
+    _register_pid(generation_number)
+
     _write_heartbeat(generation_number, "RUNNING", 0, total_tasks, 0, 0, "", [])
     _write_progress(generation_number, task_ids, {}, task_descriptions)
 
     # 3. Run pipeline for each task
     for i, task in enumerate(tasks):
+        # Check stop flag before each task — allows clean mid-benchmark stop
+        _check_stop_flag(generation_number, i, total_tasks, passed_count, failed_count)
+
         logger.info(f"[{i+1}/{total_tasks}] Processing task: {task.task_id}")
         _write_heartbeat(
             generation_number, "RUNNING", i, total_tasks,
@@ -290,6 +315,9 @@ def run_generation(gen_config: Config, generation_number: int):
             }
             all_execution_results.append(error_result)
             save_json(error_result, results_dir / f"{task.task_id}_result.json")
+
+    # Check stop flag one final time before entering ANALYSING / spawning
+    _check_stop_flag(generation_number, total_tasks, total_tasks, passed_count, failed_count)
 
     _write_heartbeat(generation_number, "ANALYSING", total_tasks, total_tasks,
                      passed_count, failed_count, "", [])

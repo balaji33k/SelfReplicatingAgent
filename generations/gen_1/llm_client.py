@@ -328,13 +328,32 @@ class LLMClient:
             else:
                 break
 
-            # All models exhausted — wait then reset
+            # All models exhausted — wait until the nearest retry_after time,
+            # or _RECOVERY_WAIT_SEC (whichever is shorter).
+            # Smart sleep: if any model has a known retry_after, sleep until that
+            # time (± 10s buffer) rather than a full 30-minute blanket wait.
+            now_utc = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+            wait_sec = float(_RECOVERY_WAIT_SEC)
+            if self._retry_after:
+                nearest_secs = []
+                for ra_str in self._retry_after.values():
+                    try:
+                        ra_dt = datetime.datetime.fromisoformat(
+                            ra_str.replace("Z", "+00:00")
+                        )
+                        secs = max(0.0, (ra_dt - now_utc).total_seconds()) + 15
+                        nearest_secs.append(secs)
+                    except Exception:
+                        pass
+                if nearest_secs:
+                    wait_sec = min(wait_sec, min(nearest_secs))
+            wait_sec = max(60.0, wait_sec)  # floor: never less than 60s
             logger.warning(
                 f"[llm_client] All models exhausted (tried: {self._exhausted_models}). "
-                f"Waiting {_RECOVERY_WAIT_SEC}s "
-                f"(attempt {recovery_attempt+1}/{_MAX_RECOVERY_ATTEMPTS})..."
+                f"Waiting {wait_sec:.0f}s (smart sleep; attempt "
+                f"{recovery_attempt+1}/{_MAX_RECOVERY_ATTEMPTS})..."
             )
-            time.sleep(_RECOVERY_WAIT_SEC)
+            time.sleep(wait_sec)
             # Clear all exhausted/unavailable sets — rolling windows reset
             self._exhausted_models.clear()
             self._tpd_exhausted.clear()

@@ -513,7 +513,7 @@
         </div>
 
         <!-- Buttons -->
-        <div style="display:flex;gap:10px;flex-shrink:0">
+        <div style="display:flex;gap:10px;flex-shrink:0;flex-wrap:wrap">
           <button id="btn-set-model" onclick="setModel()" style="
             background:rgba(0,243,255,.1);border:1px solid rgba(0,243,255,.4);
             color:#00f3ff;border-radius:8px;padding:9px 18px;font-size:.78rem;
@@ -521,6 +521,14 @@
             onmouseover="this.style.background='rgba(0,243,255,.2)'"
             onmouseout="this.style.background='rgba(0,243,255,.1)'">
             💾 Apply Model
+          </button>
+          <button id="btn-stop" onclick="stopEvolution()" style="
+            background:rgba(255,49,49,.08);border:1px solid rgba(255,49,49,.4);
+            color:#ff3131;border-radius:8px;padding:9px 18px;font-size:.78rem;
+            font-family:inherit;cursor:pointer;transition:.2s"
+            onmouseover="this.style.background='rgba(255,49,49,.2)'"
+            onmouseout="this.style.background='rgba(255,49,49,.08)'">
+            ⏹ Stop
           </button>
           <button id="btn-restart" onclick="restartEvolution()" style="
             background:rgba(255,0,255,.08);border:1px solid rgba(255,0,255,.35);
@@ -774,6 +782,29 @@ async function setModel(){
   }catch(e){setCtrlStatus('Request failed: '+e.message,'#ff3131');}
 }
 
+async function stopEvolution(){
+  var btn=document.getElementById('btn-stop');
+  if(!confirm('Stop the evolution?\n\nThe current generation will halt at the next task boundary. Use "Start Fresh" to resume.')) return;
+  if(btn)btn.disabled=true;
+  setCtrlStatus('Sending stop signal…','#ff3131');
+  try{
+    var r=await fetch('/api/config',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'stop'})});
+    var d=await r.json();
+    if(d.ok){
+      setCtrlStatus('⏹ Evolution stopped. Click Start Fresh to restart.','#ff3131');
+      setTimeout(function(){if(btn)btn.disabled=false;},3000);
+    } else {
+      setCtrlStatus('Error: '+(d.error||'unknown'),'#ff3131');
+      if(btn)btn.disabled=false;
+    }
+  }catch(e){
+    setCtrlStatus('Request failed: '+e.message,'#ff3131');
+    if(btn)btn.disabled=false;
+  }
+}
+
 async function restartEvolution(){
   var btn=document.getElementById('btn-restart');
   if(btn)btn.disabled=true;
@@ -917,7 +948,10 @@ function renderRunInfo(){
     banner.style.borderColor='rgba(255,49,49,.35)';
     iconEl.style.color='#ff3131';
     iconEl.textContent='⏹ STOPPED';
-    subEl.textContent='Click Start Fresh to restart';
+    var reason=ri.reason||'';
+    subEl.textContent=reason==='user_request'?'Stopped by you — click Start Fresh to restart'
+                    :reason==='stop_flag'?'Evolution halted — click Start Fresh to restart'
+                    :'Click Start Fresh to restart';
 
   } else if(status==='starting'){
     banner.style.background='rgba(251,191,36,.1)';

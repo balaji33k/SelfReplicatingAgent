@@ -31,8 +31,11 @@ ROOT = Path(__file__).resolve().parent
 
 # ── Global state shared between HTTP handler and evolution loop ───────────────
 _restart_event = threading.Event()   # set → evolution loop kills current run & restarts
+_stop_event    = threading.Event()   # set → evolution loop halts, does NOT auto-restart
 _current_proc: subprocess.Popen = None  # current gen_1 subprocess (so we can kill it)
 _proc_lock = threading.Lock()
+_STOP_FLAG = ROOT / "data" / "stop.flag"   # watched by all running gen processes
+_PID_FILE  = ROOT / "data" / "active_pid.json"  # written by each running gen
 
 # Known Groq free-tier models shown in the dashboard selector
 # Confirmed-working models on this account.
@@ -252,8 +255,43 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
             logger.info(f"[api] Model set to: {model_id}")
             self._json_response(200, {"ok": True, "model": model_id})
 
+        elif action == "stop":
+            logger.info("[api] Stop requested from dashboard")
+            # Write stop flag — every running gen's main.py checks this between tasks
+            _STOP_FLAG.parent.mkdir(exist_ok=True)
+            _STOP_FLAG.write_text(
+                json.dumps({"requested_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+            )
+            # Kill the tracked gen_1 subprocess (if still alive)
+            with _proc_lock:
+                if _current_proc and _current_proc.poll() is None:
+                    try:
+                        _current_proc.terminate()
+                        logger.info("[api] Terminated gen_1 process")
+                    except Exception as e:
+                        logger.warning(f"[api] Could not terminate gen_1: {e}")
+            # Kill any other active generation by PID (gen_2+)
+            if _PID_FILE.exists():
+                try:
+                    pid_data = json.loads(_PID_FILE.read_text())
+                    pid = int(pid_data.get("pid", 0))
+                    if pid:
+                        os.kill(pid, signal.SIGTERM)
+                        logger.info(f"[api] Sent SIGTERM to active gen PID {pid}")
+                except Exception as e:
+                    logger.debug(f"[api] PID kill skipped: {e}")
+            # Signal evolution loop to stop (not restart)
+            _stop_event.set()
+            _restart_event.clear()
+            _write_run_state("stopped", reason="user_request")
+            self._json_response(200, {"ok": True, "message": "Evolution stopped."})
+
         elif action == "restart":
             logger.info("[api] Restart requested from dashboard")
+            # Clear stop flag before restarting
+            if _STOP_FLAG.exists():
+                _STOP_FLAG.unlink()
+            _stop_event.clear()
             # Immediately write STOPPED state so dashboard shows it right away
             _write_run_state("stopped", reason="user_request")
             # Kill current subprocess, signal evolution loop to restart
@@ -264,6 +302,16 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
                         logger.info("[api] Terminated current evolution process")
                     except Exception as e:
                         logger.warning(f"[api] Could not terminate process: {e}")
+            # Kill any other active generation by PID (gen_2+)
+            if _PID_FILE.exists():
+                try:
+                    pid_data = json.loads(_PID_FILE.read_text())
+                    pid = int(pid_data.get("pid", 0))
+                    if pid:
+                        os.kill(pid, signal.SIGTERM)
+                        logger.info(f"[api] Sent SIGTERM to active gen PID {pid} (restart)")
+                except Exception as e:
+                    logger.debug(f"[api] PID kill skipped: {e}")
             _restart_event.set()
             self._json_response(200, {"ok": True, "message": "Evolution restarting..."})
 
@@ -326,6 +374,7 @@ def _clear_volatile_data():
         "heartbeat.json", "evolution_log.json",
         "token_usage.json", "benchmark_matrix.json",
         "model_status.json",
+        "stop.flag", "active_pid.json",   # always clear stop state on fresh start
     ]
     data_dir = ROOT / "data"
     data_dir.mkdir(exist_ok=True)
@@ -383,11 +432,19 @@ def run_evolution():
         with _proc_lock:
             _current_proc = proc
 
-        # Poll until process ends OR restart is requested
+        # Poll until process ends OR restart/stop is requested
         while proc.poll() is None:
             if _restart_event.is_set():
                 logger.info("[evolution] Dashboard restart requested — killing current run")
                 _write_run_state("stopped", reason="user_request")
+                proc.terminate()
+                try:
+                    proc.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                break
+            if _stop_event.is_set():
+                logger.info("[evolution] Dashboard STOP requested — halting run")
                 proc.terminate()
                 try:
                     proc.wait(timeout=10)
@@ -400,24 +457,48 @@ def run_evolution():
         with _proc_lock:
             _current_proc = None
 
-        if _restart_event.is_set():
+        if _stop_event.is_set():
+            # Stopped — wait indefinitely for restart or new start request
+            logger.info("=== Evolution STOPPED (user request). Waiting for Start Fresh… ===")
+            _write_run_state("stopped", reason="user_request")
+            # Block until restart is requested (which also clears _stop_event)
+            while not _restart_event.is_set():
+                time.sleep(2)
+            logger.info("=== Resuming from Stop — restarting evolution ===")
+            _restart_event.clear()
+            _stop_event.clear()
+            _write_run_state("starting")
+            time.sleep(2)
+        elif _restart_event.is_set():
             logger.info("=== Restarting evolution immediately (dashboard request) ===")
             _restart_event.clear()
             _write_run_state("starting")
             time.sleep(2)
         else:
             logger.info(f"Gen 1 process exited with code {exit_code}")
-            logger.info("Waiting 300s before restarting evolution lineage...")
-            resume_at = time.strftime("%Y-%m-%dT%H:%M:%SZ",
-                                      time.gmtime(time.time() + 300))
-            _write_run_state("waiting", reason="lineage_complete",
-                             exit_code=exit_code, resume_at=resume_at)
-            # Wait but remain interruptible by restart event
-            _restart_event.wait(timeout=300)
-            if _restart_event.is_set():
-                logger.info("=== Restarting early (dashboard request during wait) ===")
+            # If stop flag was written while gen ran, don't auto-restart
+            if _STOP_FLAG.exists():
+                logger.info("Stop flag present — waiting for user to Start Fresh.")
+                _write_run_state("stopped", reason="stop_flag")
+                while not _restart_event.is_set():
+                    time.sleep(2)
+                logger.info("=== Resuming after stop flag — restarting ===")
                 _restart_event.clear()
+                _stop_event.clear()
                 _write_run_state("starting")
+                time.sleep(2)
+            else:
+                logger.info("Waiting 300s before restarting evolution lineage...")
+                resume_at = time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                                          time.gmtime(time.time() + 300))
+                _write_run_state("waiting", reason="lineage_complete",
+                                 exit_code=exit_code, resume_at=resume_at)
+                # Wait but remain interruptible by restart event
+                _restart_event.wait(timeout=300)
+                if _restart_event.is_set():
+                    logger.info("=== Restarting early (dashboard request during wait) ===")
+                    _restart_event.clear()
+                    _write_run_state("starting")
 
 
 if __name__ == "__main__":
