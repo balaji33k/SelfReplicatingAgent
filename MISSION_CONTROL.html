@@ -2,2094 +2,518 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Evolution Mission Control</title>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Self-Replicating Agent — Mission Control</title>
   <style>
-    :root {
-      --bg:#05060f;--card:rgba(15,16,35,.75);--border:rgba(255,255,255,.08);
-      --cyan:#00f3ff;--magenta:#ff00ff;--lime:#39ff14;--amber:#ffb300;
-      --red:#ff3131;--text:#e0e0e0;--dim:#64748b;
-      --font:'Outfit',sans-serif;--mono:'JetBrains Mono',monospace;
-    }
     *{box-sizing:border-box;margin:0;padding:0}
-    body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;overflow-x:hidden}
-    body::before{content:'';position:fixed;inset:0;
-      background-image:radial-gradient(circle at 2px 2px,rgba(255,255,255,.04) 1px,transparent 0);
-      background-size:36px 36px;pointer-events:none;z-index:0}
+    body{background:#0a0b14;color:#e2e8f0;font-family:system-ui,-apple-system,sans-serif;
+      min-height:100vh;padding:20px}
+    h2{font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;color:#475569;margin-bottom:12px}
+    .wrap{max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
 
-    /* ── Layout ── */
-    .shell{display:grid;grid-template-columns:280px 1fr;min-height:100vh;position:relative;z-index:1}
-    .sidebar{border-right:1px solid var(--border);background:rgba(0,0,0,.45);backdrop-filter:blur(20px);
-      padding:24px 18px;display:flex;flex-direction:column;gap:12px;
-      position:sticky;top:0;height:100vh;overflow-y:auto}
-    .main{padding:28px;overflow-y:auto;display:flex;flex-direction:column;gap:20px}
-    .brand{font-size:.9rem;font-weight:800;letter-spacing:3px;text-transform:uppercase;
-      background:linear-gradient(90deg,var(--cyan),var(--magenta));
-      -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:2px}
-    h2{font-size:.6rem;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:10px}
-    .card{background:var(--card);backdrop-filter:blur(12px);border:1px solid var(--border);
-      border-radius:18px;padding:22px}
-    .card-title{font-size:.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:16px}
+    /* ── TOP HEADER ── */
+    .header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+      padding:16px 20px;background:#111827;border-radius:12px;
+      border:1px solid #1e293b}
+    .brand{font-size:1rem;font-weight:700;color:#38bdf8;letter-spacing:.05em}
+    .brand span{color:#a78bfa}
+    .header-links{display:flex;gap:8px}
+    .link-btn{padding:6px 14px;border-radius:7px;font-size:.72rem;font-weight:600;
+      text-decoration:none;border:1px solid #334155;color:#94a3b8;background:transparent;cursor:pointer}
+    .link-btn:hover{border-color:#38bdf8;color:#38bdf8}
 
-    /* ── HERO PROGRESS CARD ── */
-    .hero-card{background:linear-gradient(135deg,rgba(0,243,255,.06),rgba(255,0,255,.06));
-      border:1px solid rgba(0,243,255,.2);border-radius:22px;padding:28px;position:relative;overflow:hidden}
-    .hero-card::before{content:'';position:absolute;top:-60px;right:-60px;width:200px;height:200px;
-      border-radius:50%;background:radial-gradient(circle,rgba(0,243,255,.12),transparent 70%);pointer-events:none}
-    .hero-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px}
-    .hero-gen{font-size:2.8rem;font-weight:800;line-height:1;
-      background:linear-gradient(135deg,var(--cyan),var(--magenta));
-      -webkit-background-clip:text;-webkit-text-fill-color:transparent}
-    .hero-gen-label{font-size:.6rem;color:var(--dim);letter-spacing:2px;text-transform:uppercase;margin-top:4px}
-    .hero-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+    /* ── STATUS CARD ── */
+    .status-card{padding:20px 24px;border-radius:12px;border:1px solid #1e293b;
+      background:#111827;display:flex;flex-direction:column;gap:14px}
+    .status-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+    .status-badge{display:inline-flex;align-items:center;gap:7px;
+      padding:6px 14px;border-radius:20px;font-size:.75rem;font-weight:700;letter-spacing:.05em}
+    .badge-running{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#4ade80}
+    .badge-stopped{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#f87171}
+    .badge-analysing{background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:#c084fc}
+    .badge-spawning{background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);color:#fbbf24}
+    .badge-waiting{background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);color:#818cf8}
+    .badge-done{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);color:#4ade80}
+    .badge-default{background:rgba(100,116,139,.1);border:1px solid rgba(100,116,139,.3);color:#64748b}
+    .dot{width:7px;height:7px;border-radius:50%;background:currentColor;animation:pulse 1.4s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+    .status-gen{font-size:1.6rem;font-weight:800;color:#e2e8f0}
+    .status-progress{font-size:1rem;color:#94a3b8}
+    .status-task{font-size:.75rem;color:#64748b;font-family:monospace;margin-top:4px;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-    /* ── Big circular progress ── */
-    .circle-wrap{position:relative;width:110px;height:110px}
-    .circle-wrap svg{transform:rotate(-90deg)}
-    .circle-bg{fill:none;stroke:rgba(255,255,255,.06);stroke-width:8}
-    .circle-fill{fill:none;stroke-width:8;stroke-linecap:round;
-      stroke-dasharray:283;stroke-dashoffset:283;
-      transition:stroke-dashoffset 1s cubic-bezier(.4,0,.2,1)}
-    .circle-center{position:absolute;inset:0;display:flex;flex-direction:column;
-      align-items:center;justify-content:center;text-align:center}
-    .circle-pct{font-size:1.3rem;font-weight:800;color:var(--cyan);line-height:1}
-    .circle-sub{font-size:.5rem;color:var(--dim);letter-spacing:1px;text-transform:uppercase;margin-top:2px}
+    /* ── WAIT ALERT ── */
+    .wait-alert{background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.25);
+      border-radius:9px;padding:12px 16px;font-size:.78rem;color:#fbbf24;
+      display:none;align-items:flex-start;gap:10px}
+    .wait-alert.show{display:flex}
+    .wait-alert strong{display:block;margin-bottom:3px;font-size:.82rem}
+    .wait-alert .models-list{color:#94a3b8;font-size:.7rem;margin-top:4px;font-family:monospace}
 
-    /* ── Main progress bar ── */
-    .progress-section{margin-top:4px}
-    .progress-meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-    .progress-label{font-size:.85rem;font-weight:700;color:var(--text)}
-    .progress-count{font-size:1.6rem;font-weight:800;color:var(--cyan);
-      text-shadow:0 0 20px rgba(0,243,255,.5)}
-    .progress-total{font-size:.85rem;color:var(--dim)}
-    .big-bar-track{height:14px;background:rgba(255,255,255,.05);border-radius:10px;
-      overflow:hidden;border:1px solid rgba(255,255,255,.06);position:relative}
-    .big-bar-fill{height:100%;border-radius:10px;position:relative;
-      background:linear-gradient(90deg,var(--cyan),var(--magenta));
-      transition:width .8s cubic-bezier(.4,0,.2,1);
-      box-shadow:0 0 20px rgba(0,243,255,.4)}
-    .big-bar-fill::after{content:'';position:absolute;inset:0;
-      background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.35) 50%,transparent 100%);
-      animation:shimmer 1.6s infinite}
-    /* Working sub-bar: shows intra-task phase progress in a ghost colour */
-    .big-bar-inprogress{height:100%;border-radius:10px;position:absolute;top:0;left:0;
-      background:linear-gradient(90deg,rgba(0,243,255,.25),rgba(255,0,255,.15));
-      transition:width .8s cubic-bezier(.4,0,.2,1);pointer-events:none}
-    @keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(200%)} }
-    /* Pulse glow on bar track when actively working */
-    .big-bar-track.working{box-shadow:0 0 0 1px rgba(0,243,255,.2),0 0 18px rgba(0,243,255,.12);
-      animation:trackpulse 2s ease-in-out infinite}
-    @keyframes trackpulse{0%,100%{box-shadow:0 0 0 1px rgba(0,243,255,.2),0 0 12px rgba(0,243,255,.1)}
-      50%{box-shadow:0 0 0 1px rgba(0,243,255,.4),0 0 24px rgba(0,243,255,.25)}}
-    .seg-labels{display:flex;justify-content:space-between;margin-top:6px}
-    .seg-label{font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+    /* ── PROGRESS BAR ── */
+    .progress-section{display:flex;flex-direction:column;gap:6px}
+    .progress-meta{display:flex;justify-content:space-between;font-size:.72rem;color:#64748b}
+    .bar-track{height:10px;background:#1e293b;border-radius:6px;overflow:hidden}
+    .bar-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#38bdf8,#a78bfa);
+      transition:width .6s ease;min-width:2px}
+    .stats-row{display:flex;gap:20px;font-size:.75rem;color:#94a3b8}
+    .stat-pass{color:#4ade80;font-weight:700}
+    .stat-fail{color:#f87171;font-weight:700}
 
-    /* ── Mini stats row ── */
-    .mini-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}
-    .mini-stat{background:rgba(255,255,255,.03);border:1px solid var(--border);
-      border-radius:12px;padding:12px;text-align:center;transition:.3s}
-    .mini-stat:hover{border-color:var(--cyan);background:rgba(0,243,255,.05)}
-    .mini-val{font-size:1.4rem;font-weight:800;line-height:1}
-    .mini-label{font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+    /* ── RATE LIMIT STATUS ── */
+    .model-card{padding:16px 20px;border-radius:12px;border:1px solid #1e293b;background:#111827}
+    .model-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+    .model-name{font-size:.85rem;font-weight:700;color:#38bdf8;font-family:monospace}
+    .model-tag{font-size:.65rem;padding:2px 8px;border-radius:4px;background:#1e293b;
+      color:#64748b;text-transform:uppercase;letter-spacing:.05em}
+    .rate-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+    .chip{padding:4px 10px;border-radius:6px;font-size:.65rem;font-family:monospace;
+      border:1px solid transparent;white-space:nowrap}
+    .chip-ok{background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.25);color:#4ade80}
+    .chip-warn{background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.25);color:#fbbf24}
+    .chip-dead{background:rgba(239,68,68,.07);border-color:rgba(239,68,68,.2);color:#f87171}
 
-    /* ── Live ticker ── */
-    .ticker-wrap{background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:12px;
-      padding:10px 16px;display:flex;align-items:center;gap:10px;margin-top:14px;min-height:40px}
-    .ticker-dot{width:8px;height:8px;border-radius:50%;background:var(--lime);flex-shrink:0;
-      animation:dotpulse 1.2s ease-in-out infinite}
-    .ticker-text{font-family:var(--mono);font-size:.65rem;color:var(--cyan);
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    /* ── CONTROLS ── */
+    .controls{padding:16px 20px;border-radius:12px;border:1px solid #1e293b;background:#111827}
+    .controls-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .model-select{flex:1;min-width:200px;background:#0a0b14;border:1px solid #334155;
+      color:#e2e8f0;border-radius:8px;padding:8px 12px;font-size:.78rem;
+      font-family:inherit;outline:none;cursor:pointer}
+    .model-select:focus{border-color:#38bdf8}
+    .btn{padding:8px 18px;border-radius:8px;font-size:.78rem;font-weight:600;
+      font-family:inherit;cursor:pointer;border:1px solid transparent;transition:.15s}
+    .btn-apply{background:rgba(56,189,248,.1);border-color:rgba(56,189,248,.4);color:#38bdf8}
+    .btn-apply:hover{background:rgba(56,189,248,.2)}
+    .btn-stop{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.35);color:#f87171}
+    .btn-stop:hover{background:rgba(239,68,68,.18)}
+    .btn-restart{background:rgba(167,139,250,.08);border-color:rgba(167,139,250,.35);color:#a78bfa}
+    .btn-restart:hover{background:rgba(167,139,250,.18)}
+    .btn:disabled{opacity:.4;cursor:not-allowed}
+    .ctrl-msg{font-size:.72rem;color:#64748b;margin-top:8px;min-height:16px;transition:color .2s}
 
-    /* ── Segment breakdown ── */
-    .seg-bars{display:flex;height:6px;border-radius:4px;overflow:hidden;gap:1px;margin-top:10px}
-    .seg-pass{background:var(--lime);flex-shrink:0;transition:flex .8s ease}
-    .seg-fail{background:var(--red);flex-shrink:0;transition:flex .8s ease}
-    .seg-pend{background:rgba(255,255,255,.08);flex:1}
+    /* ── TASK TABLE ── */
+    .task-card{padding:16px 20px;border-radius:12px;border:1px solid #1e293b;background:#111827}
+    .task-filters{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+    .filter{padding:3px 10px;border-radius:5px;font-size:.65rem;cursor:pointer;
+      border:1px solid #334155;color:#64748b;background:transparent}
+    .filter.active,.filter:hover{border-color:#38bdf8;color:#38bdf8;background:rgba(56,189,248,.07)}
+    table{width:100%;border-collapse:collapse;font-size:.74rem}
+    th{text-align:left;padding:6px 10px;color:#475569;font-size:.6rem;
+      letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid #1e293b}
+    td{padding:7px 10px;border-bottom:1px solid #0f172a;color:#94a3b8;font-family:monospace}
+    tr:hover td{background:rgba(255,255,255,.02)}
+    .t-pass td:first-child{border-left:2px solid #4ade80}
+    .t-fail td:first-child{border-left:2px solid #f87171}
+    .t-active td:first-child{border-left:2px solid #fbbf24}
+    .t-pending td:first-child{border-left:2px solid #334155}
+    .pill{display:inline-block;padding:2px 7px;border-radius:4px;font-size:.62rem}
+    .pill-pass{background:rgba(34,197,94,.1);color:#4ade80}
+    .pill-fail{background:rgba(239,68,68,.08);color:#f87171}
+    .pill-run{background:rgba(251,191,36,.1);color:#fbbf24}
+    .pill-wait{background:rgba(100,116,139,.08);color:#475569}
+    .task-id{color:#e2e8f0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .task-desc{color:#64748b;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+      font-family:system-ui,sans-serif;font-size:.7rem}
 
-    /* ── Badges ── */
-    .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;
-      font-size:.58rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;border:1px solid}
-    .badge-running{color:var(--lime);border-color:var(--lime);background:rgba(57,255,20,.08)}
-    .badge-done{color:var(--cyan);border-color:var(--cyan);background:rgba(0,243,255,.08)}
-    .badge-spawning{color:var(--amber);border-color:var(--amber);background:rgba(255,179,0,.08)}
-    .badge-fail{color:var(--red);border-color:var(--red);background:rgba(255,49,49,.08)}
-    .badge-idle{color:var(--dim);border-color:var(--dim);background:rgba(255,255,255,.04)}
-    .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
-    .dot-pulse{animation:dotpulse 1.2s ease-in-out infinite}
-    @keyframes dotpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
-
-    /* ── Timeline ── */
-    .timeline{display:flex;align-items:center;flex-wrap:wrap;padding:6px 0;gap:0}
-    .tl-node{display:flex;flex-direction:column;align-items:center;cursor:pointer}
-    .tl-circle{width:52px;height:52px;border-radius:50%;border:2px solid var(--border);
-      background:var(--card);display:flex;align-items:center;justify-content:center;
-      font-size:.68rem;font-weight:800;transition:.3s;position:relative;flex-direction:column;gap:1px}
-    .tl-circle:hover,.tl-circle.active{border-color:var(--cyan);box-shadow:0 0 18px rgba(0,243,255,.3)}
-    .tl-circle.live{border-color:var(--lime);box-shadow:0 0 18px rgba(57,255,20,.3)}
-    .tl-circle.live::after{content:'';position:absolute;inset:-5px;border-radius:50%;
-      border:1px solid var(--lime);opacity:.5;animation:ringpulse 2s infinite}
-    @keyframes ringpulse{0%{transform:scale(1);opacity:.5}100%{transform:scale(1.5);opacity:0}}
-
-    /* ── Spinner ── */
-    .spinner{width:18px;height:18px;border-radius:50%;border:2px solid rgba(57,255,20,.2);
-      border-top-color:var(--lime);animation:spin .8s linear infinite;flex-shrink:0}
-    .spinner-cyan{border-color:rgba(0,243,255,.2);border-top-color:var(--cyan)}
-    .spinner-sm{width:12px;height:12px;border-width:2px}
-    @keyframes spin{to{transform:rotate(360deg)}}
-
-    /* Spinner inside gen button */
-    .gen-btn-header{display:flex;align-items:center;gap:7px}
-    .tl-label{font-size:.52rem;color:var(--dim);margin-top:5px;text-align:center;line-height:1.3}
-    .tl-pct{font-size:.5rem;color:var(--cyan)}
-    .tl-line{flex:1;height:2px;min-width:16px;background:var(--border);margin-bottom:20px}
-    .tl-line.done{background:linear-gradient(90deg,var(--cyan),rgba(0,243,255,.3))}
-
-    /* ── Sidebar gen buttons ── */
-    .gen-btn{padding:10px 12px;border-radius:12px;border:1px solid var(--border);
-      background:var(--card);cursor:pointer;transition:.3s;position:relative;overflow:hidden}
-    .gen-btn::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
-      background:var(--border);transition:.3s}
-    .gen-btn:hover{border-color:var(--cyan);transform:translateX(3px)}
-    .gen-btn:hover::before,.gen-btn.active::before{background:var(--cyan)}
-    .gen-btn.active{border-color:var(--cyan);background:rgba(0,243,255,.08);box-shadow:0 0 20px rgba(0,243,255,.08)}
-    .gen-btn-title{font-size:.7rem;font-weight:700;margin-bottom:3px}
-    .gen-btn-sub{font-size:.56rem;color:var(--dim)}
-    /* mini progress inside sidebar button */
-    .gen-btn-bar{height:2px;background:rgba(255,255,255,.06);border-radius:2px;margin-top:6px;overflow:hidden}
-    .gen-btn-bar-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--magenta));transition:width .8s ease}
-
-    /* ── Tabs ── */
-    .tab-bar{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px}
-    .tab-btn{background:none;border:none;color:var(--dim);font-size:.65rem;font-weight:700;
-      padding:8px 16px;cursor:pointer;border-bottom:2px solid transparent;transition:.2s;letter-spacing:.04em}
-    .tab-btn:hover{color:var(--fg)}
-    .tab-btn.active{color:var(--cyan);border-bottom-color:var(--cyan)}
-    .summary-section{margin-bottom:14px}
-    .summary-title{font-size:.56rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
-    .summary-desc{font-size:.75rem;color:var(--fg);line-height:1.5;margin-bottom:12px}
-    .check-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:.65rem}
-    .check-icon{width:18px;text-align:center;font-size:.75rem;flex-shrink:0}
-    .phase-check-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
-    .phase-check{padding:8px 10px;border-radius:8px;border:1px solid var(--border);text-align:center;font-size:.62rem}
-    .phase-check.ok{border-color:rgba(57,255,20,.3);background:rgba(57,255,20,.06);color:var(--lime)}
-    .phase-check.fail{border-color:rgba(255,49,49,.3);background:rgba(255,49,49,.06);color:var(--red)}
-    .phase-check.pend{color:var(--dim)}
-    .code-wrap{background:#0a0a0f;border:1px solid var(--border);border-radius:8px;
-      overflow:auto;max-height:420px;padding:14px;position:relative}
-    .code-wrap pre{margin:0;font-size:.65rem;font-family:var(--mono);line-height:1.6;
-      color:#e2e8f0;white-space:pre;overflow-x:auto}
-    .code-copy-btn{position:absolute;top:8px;right:8px;background:rgba(0,243,255,.12);
-      border:1px solid rgba(0,243,255,.3);color:var(--cyan);font-size:.58rem;padding:3px 8px;
-      border-radius:6px;cursor:pointer}
-    .code-copy-btn:hover{background:rgba(0,243,255,.25)}
-    /* ── Task phase progress bar ── */
-    .phase-bar-wrap{margin-top:14px;padding:12px 14px;border-radius:12px;
-      border:1px solid rgba(0,243,255,.12);background:rgba(0,243,255,.03)}
-    .phase-bar-label{font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
-    .phase-bar-task-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-    .phase-bar-task-id{font-size:.65rem;color:var(--cyan);font-family:var(--mono);
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%}
-    .phase-bar-elapsed{font-size:.62rem;color:#fbbf24;font-family:var(--mono);font-weight:700}
-    .phase-steps{display:flex;align-items:flex-start;gap:0;overflow-x:auto}
-    .phase-step{flex:1;min-width:52px;text-align:center;padding:8px 2px 5px;
-      border-top:3px solid rgba(255,255,255,.08);cursor:default;transition:.3s}
-    .phase-step.ps-done{border-top-color:var(--lime);opacity:.8}
-    .phase-step.ps-active{border-top-color:var(--cyan);
-      background:rgba(0,243,255,.06);border-radius:0 0 6px 6px}
-    .phase-step.ps-skip{opacity:.18}
-    .phase-step-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.12);
-      margin:0 auto 4px;transition:.3s}
-    .phase-step.ps-done .phase-step-dot{background:var(--lime)}
-    .phase-step.ps-active .phase-step-dot{background:var(--cyan);box-shadow:0 0 12px var(--cyan);
-      animation:dotPulse 1.2s infinite}
-    .phase-step-txt{font-size:.5rem;color:var(--dim);line-height:1.3;transition:.3s;margin-top:3px}
-    .phase-step.ps-done .phase-step-txt{color:var(--lime)}
-    .phase-step.ps-active .phase-step-txt{color:var(--cyan);font-weight:800;font-size:.54rem}
-    @keyframes dotPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.6);opacity:.6}}
-
-    /* ── Topology node diagram ── */
-    .pipeline-flow{display:flex;align-items:center;overflow-x:auto;padding:10px 0;gap:0;flex-wrap:nowrap}
-    .pipe-node{display:flex;flex-direction:column;align-items:center;gap:5px;
-      padding:14px 10px 10px;border-radius:14px;border:2px solid var(--border);
-      background:#0d0d18;min-width:80px;text-align:center;transition:.3s;flex-shrink:0;position:relative}
-    .pipe-node.pn-always{border-color:rgba(0,243,255,.4);background:rgba(0,243,255,.05)}
-    .pipe-node.pn-on{border-color:rgba(57,255,20,.4);background:rgba(57,255,20,.04)}
-    .pipe-node.pn-off{opacity:.18;filter:grayscale(1)}
-    .pipe-node.pn-active{border-color:var(--cyan)!important;background:rgba(0,243,255,.12)!important;
-      box-shadow:0 0 24px rgba(0,243,255,.5);animation:nodeGlow 1.4s infinite}
-    .pipe-node-icon{font-size:1.5rem;line-height:1}
-    .pipe-node-label{font-size:.6rem;font-weight:800;color:var(--fg);letter-spacing:.02em}
-    .pipe-node-badge{font-size:.48rem;font-weight:700;padding:1px 6px;border-radius:4px;margin-top:2px}
-    .pnb-core{background:rgba(0,243,255,.15);color:var(--cyan)}
-    .pnb-on{background:rgba(57,255,20,.15);color:var(--lime)}
-    .pnb-off{background:rgba(255,255,255,.06);color:var(--dim)}
-    .pipe-conn{display:flex;flex-direction:column;align-items:center;justify-content:center;
-      flex-shrink:0;padding:0 2px;gap:1px}
-    .pipe-conn-line{height:2px;width:24px;background:rgba(255,255,255,.12);border-radius:2px}
-    .pipe-conn-line.pc-active{background:var(--cyan);box-shadow:0 0 6px var(--cyan)}
-    .pipe-conn-arrow{font-size:.7rem;color:rgba(255,255,255,.2);margin-top:-2px}
-    .pipe-conn-arrow.pc-active{color:var(--cyan)}
-    .pipe-cycle-badge{position:absolute;top:-10px;left:50%;transform:translateX(-50%);
-      font-size:.46rem;background:var(--amber);color:#000;padding:1px 5px;border-radius:4px;white-space:nowrap;font-weight:700}
-    @keyframes nodeGlow{0%,100%{box-shadow:0 0 24px rgba(0,243,255,.5)}
-      50%{box-shadow:0 0 40px rgba(0,243,255,.85)}}
-
-    /* ── Sidebar task list ── */
-    .sb-task-list{display:flex;flex-direction:column;gap:1px;margin-top:8px;
-      max-height:320px;overflow-y:auto;border-top:1px solid var(--border);padding-top:6px}
-    .sb-task-row{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px;
-      font-size:.6rem;font-family:var(--mono)}
-    .sb-task-row.t-run{background:rgba(0,243,255,.08);border:1px solid rgba(0,243,255,.2)}
-    .sb-task-row.t-pass{opacity:.55}
-    .sb-task-row.t-fail{background:rgba(255,49,49,.07);cursor:pointer}
-    .sb-task-row.t-fail:hover{background:rgba(255,49,49,.15)}
-    .sb-task-row.t-pend{opacity:.2}
-    .sb-task-icon{width:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
-    .sb-task-id{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .sb-task-err{font-size:.54rem;color:var(--red);flex-shrink:0;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
-    /* ── Gen detail stats ── */
-    .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-    .stat{border-left:2px solid var(--border);padding:8px 12px;transition:.3s}
-    .stat:hover{border-left-color:var(--cyan)}
-    .stat-val{font-size:1.9rem;font-weight:800;color:var(--cyan);text-shadow:0 0 12px rgba(0,243,255,.3);line-height:1}
-    .stat-label{font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;margin-top:2px}
-
-    /* ── Table ── */
-    .filter-bar{display:flex;gap:7px;margin-bottom:12px}
-    .filter-btn{padding:4px 11px;border-radius:6px;border:1px solid var(--border);
-      background:transparent;color:var(--dim);font-size:.58rem;font-weight:700;
-      letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:.2s;font-family:var(--font)}
-    .filter-btn:hover,.filter-btn.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,243,255,.08)}
-    table{width:100%;border-collapse:separate;border-spacing:0 5px;font-family:var(--mono);font-size:.68rem}
-    th{text-align:left;padding:9px 13px;color:var(--dim);font-size:.58rem;letter-spacing:1px;
-      text-transform:uppercase;border-bottom:1px solid var(--border)}
-    td{padding:9px 13px;background:rgba(255,255,255,.02);
-      border-top:1px solid var(--border);border-bottom:1px solid var(--border);transition:.2s}
-    tr td:first-child{border-left:1px solid var(--border);border-radius:8px 0 0 8px}
-    tr td:last-child{border-right:1px solid var(--border);border-radius:0 8px 8px 0}
-    tr:hover td{background:rgba(0,243,255,.04);border-color:rgba(0,243,255,.2);cursor:pointer}
-    .pill{padding:2px 7px;border-radius:5px;font-size:.56rem;font-weight:700;
-      text-transform:uppercase;border:1px solid}
-    .pass-pill{color:var(--lime);border-color:var(--lime);background:rgba(57,255,20,.08)}
-    .fail-pill{color:var(--red);border-color:var(--red);background:rgba(255,49,49,.08)}
-
-    /* ── Breakdown bars ── */
-    .breakdown{display:flex;flex-direction:column;gap:8px}
-    .bd-row{display:flex;align-items:center;gap:10px}
-    .bd-label{font-size:.63rem;font-family:var(--mono);min-width:140px}
-    .bd-track{flex:1;height:5px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden}
-    .bd-fill{height:100%;border-radius:3px;transition:width .8s ease}
-    .bd-count{font-size:.58rem;color:var(--dim);min-width:22px;text-align:right}
-
-    /* ── Matrix ── */
-    .matrix-wrap{overflow-x:auto}
-    .matrix-table{border-spacing:3px}
-    .matrix-table th{font-size:.56rem;padding:5px 8px;white-space:nowrap}
-    .matrix-table td{padding:4px 8px;border-radius:5px;text-align:center;
-      font-size:.58rem;font-weight:700;border:none;min-width:48px}
-    .m-pass{background:rgba(57,255,20,.15);color:var(--lime)}
-    .m-fail{background:rgba(255,49,49,.12);color:var(--red)}
-    .m-new{background:rgba(0,243,255,.2);color:var(--cyan)}
-    .m-reg{background:rgba(255,179,0,.2);color:var(--amber)}
-    .m-none{background:rgba(255,255,255,.03);color:var(--dim)}
-
-    /* ── Evo entry ── */
-    .evo-entry{border-left:3px solid var(--border);padding:12px 16px;margin-bottom:14px;
-      background:rgba(255,255,255,.02);border-radius:0 10px 10px 0;transition:.3s}
-    .evo-entry.improved{border-left-color:var(--lime)}
-    .evo-entry.regressed{border-left-color:var(--red)}
-    .evo-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
-    .evo-title{font-size:.78rem;font-weight:700}
-    .delta-pos{color:var(--lime);font-weight:700}
-    .delta-neg{color:var(--red);font-weight:700}
-    .delta-pend{color:var(--dim)}
-    .evo-meta{font-size:.58rem;color:var(--dim);margin-bottom:6px}
-    .evo-changes{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0}
-    .change-tag{padding:2px 7px;border-radius:4px;font-size:.56rem;font-weight:600;
-      background:rgba(0,243,255,.1);color:var(--cyan);border:1px solid rgba(0,243,255,.2)}
-    .evo-log{font-size:.63rem;color:var(--dim);line-height:1.5;margin-top:5px;
-      display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-    .attr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
-    .attr-item{padding:10px;border:1px solid var(--border);border-radius:10px;text-align:center;transition:.3s}
-    .attr-item:hover{border-color:var(--magenta)}
-    .attr-count{font-size:1.4rem;font-weight:800;color:var(--magenta);line-height:1}
-    .attr-name{font-size:.56rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
-
-    /* ── Evolution Improvements ── */
-    .evo-imp-section{display:flex;flex-direction:column;gap:14px}
-    .evo-imp-card{border:1px solid rgba(0,243,255,.15);border-radius:16px;
-      background:linear-gradient(135deg,rgba(0,243,255,.03),rgba(255,0,255,.02));
-      padding:20px;position:relative;overflow:hidden;transition:.3s}
-    .evo-imp-card::before{content:'';position:absolute;top:0;left:0;bottom:0;width:3px;
-      background:linear-gradient(180deg,var(--cyan),var(--magenta));border-radius:3px 0 0 3px}
-    .evo-imp-card.improved::before{background:linear-gradient(180deg,var(--lime),var(--cyan))}
-    .evo-imp-card.regressed::before{background:linear-gradient(180deg,var(--red),var(--amber))}
-    .evo-imp-card.pending::before{background:var(--dim)}
-    .evo-imp-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-    .evo-imp-gen{font-size:.9rem;font-weight:800;color:var(--text)}
-    .evo-imp-gen span{color:var(--cyan);margin:0 4px}
-    .evo-imp-delta-chip{padding:3px 10px;border-radius:20px;font-size:.6rem;font-weight:700;
-      border:1px solid;display:flex;align-items:center;gap:4px}
-    .evo-imp-delta-chip.improved{color:var(--lime);border-color:rgba(57,255,20,.3);background:rgba(57,255,20,.08)}
-    .evo-imp-delta-chip.regressed{color:var(--red);border-color:rgba(255,49,49,.3);background:rgba(255,49,49,.08)}
-    .evo-imp-delta-chip.pending{color:var(--dim);border-color:var(--border);background:rgba(255,255,255,.03)}
-    .evo-imp-meta{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
-    .evo-imp-rate{font-size:.62rem;color:var(--dim)}
-    .evo-imp-rate strong{color:var(--cyan)}
-    .evo-imp-tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
-    .evo-imp-tag-err{padding:2px 8px;border-radius:4px;font-size:.56rem;font-weight:600;
-      background:rgba(255,49,49,.1);color:var(--red);border:1px solid rgba(255,49,49,.2);font-family:var(--mono)}
-    .evo-imp-tag-topo{padding:2px 8px;border-radius:4px;font-size:.56rem;font-weight:600;
-      background:rgba(57,255,20,.08);color:var(--lime);border:1px solid rgba(57,255,20,.2)}
-    .evo-imp-divider{height:1px;background:var(--border);margin:10px 0}
-    .evo-imp-log-label{font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;display:flex;align-items:center;gap:6px}
-    .evo-imp-log-text{font-size:.68rem;color:var(--text);line-height:1.65}
-    .evo-imp-empty{text-align:center;padding:32px;color:var(--dim);font-size:.68rem}
-
-    /* ── Token Budget Card ── */
-    .tb-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px}
-    .tb-model-name{font-size:.82rem;font-weight:800;color:var(--text);font-family:var(--mono);word-break:break-all}
-    .tb-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;align-items:center}
-    .tb-chip{padding:2px 9px;border-radius:5px;font-size:.55rem;font-weight:700;
-      letter-spacing:.06em;border:1px solid;font-family:var(--mono)}
-    .tb-chip-groq{color:var(--cyan);border-color:rgba(0,243,255,.35);background:rgba(0,243,255,.08)}
-    .tb-chip-stat{color:var(--dim);border-color:var(--border);background:rgba(255,255,255,.03)}
-    .tb-budget-wrap{margin:14px 0 10px}
-    .tb-budget-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
-    .tb-budget-label{font-size:.54rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
-    .tb-budget-pct{font-size:.65rem;font-weight:800}
-    .tb-bar-track{height:8px;background:rgba(255,255,255,.05);border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,.04)}
-    .tb-bar-fill{height:100%;border-radius:6px;transition:width 1.2s cubic-bezier(.4,0,.2,1)}
-    .tb-bar-meta{display:flex;justify-content:space-between;margin-top:5px}
-    .tb-bar-used{font-size:.56rem;color:var(--dim)}
-    .tb-bar-left{font-size:.56rem;color:var(--lime)}
-    .tb-divider{height:1px;background:var(--border);margin:12px 0}
-    .tb-agents-label{font-size:.54rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
-    .tb-agent-row{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.03)}
-    .tb-agent-row:last-child{border-bottom:none}
-    .tb-agent-name{font-size:.65rem;font-family:var(--mono);color:var(--cyan);min-width:90px;flex-shrink:0}
-    .tb-agent-tokens{font-size:.65rem;font-family:var(--mono);min-width:65px;flex-shrink:0;text-align:right}
-    .tb-agent-bar-wrap{flex:1;height:3px;background:rgba(255,255,255,.06);border-radius:2px;min-width:40px}
-    .tb-agent-bar{height:100%;border-radius:2px;background:var(--cyan);transition:width .8s ease}
-    .tb-agent-calls{font-size:.54rem;color:var(--dim);min-width:36px;text-align:right;flex-shrink:0}
-    .tb-empty{color:var(--dim);font-size:.65rem;text-align:center;padding:16px 0}
-    .tb-timestamp{font-size:.5rem;color:rgba(255,255,255,.12);margin-top:10px;text-align:right}
-
-    /* ── Drawer ── */
-    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);
-      z-index:999;opacity:0;pointer-events:none;transition:.3s}
-    .overlay.show{opacity:1;pointer-events:all}
-    .drawer{position:fixed;top:0;right:-900px;width:800px;height:100vh;
-      background:#070815;border-left:1px solid var(--border);z-index:1000;
-      transition:transform .5s cubic-bezier(.16,1,.3,1);padding:36px;overflow-y:auto;
-      box-shadow:-20px 0 60px rgba(0,0,0,.6)}
-    .drawer.open{transform:translateX(-900px)}
-    pre{background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:10px;
-      padding:14px;font-size:.67rem;overflow-x:auto;white-space:pre-wrap;line-height:1.5}
-    .close-btn{position:absolute;top:18px;right:18px;background:transparent;
-      border:1px solid var(--border);color:var(--dim);border-radius:8px;
-      padding:5px 11px;cursor:pointer;font-size:.67rem;font-family:var(--font)}
-    .close-btn:hover{border-color:var(--red);color:var(--red)}
-
-    /* ── Scrollbar ── */
-    ::-webkit-scrollbar{width:4px;height:4px}
-    ::-webkit-scrollbar-track{background:transparent}
-    ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
-    ::-webkit-scrollbar-thumb:hover{background:rgba(0,243,255,.4)}
-
-    /* ── Animated number ── */
-    @keyframes numPop{0%{transform:scale(1.3);opacity:.5}100%{transform:scale(1);opacity:1}}
-    .num-pop{animation:numPop .4s ease}
-
-    /* ── ETA chip ── */
-    .eta-chip{background:rgba(255,179,0,.1);border:1px solid rgba(255,179,0,.3);
-      border-radius:8px;padding:4px 10px;font-size:.58rem;color:var(--amber);font-family:var(--mono)}
-
-    /* ── Task list ── */
-    .task-list{display:flex;flex-direction:column;gap:2px;margin-top:4px}
-    .task-row{display:flex;align-items:center;gap:10px;padding:6px 10px;
-      border-radius:8px;font-size:.63rem;font-family:var(--mono);transition:.15s}
-    .task-row.t-run{background:rgba(0,243,255,.06);border:1px solid rgba(0,243,255,.18)}
-    .task-row.t-pass{opacity:.6}
-    .task-row.t-fail{background:rgba(255,49,49,.05);cursor:pointer}
-    .task-row.t-fail:hover{background:rgba(255,49,49,.12);border:1px solid rgba(255,49,49,.2)}
-    .task-row.t-pend{opacity:.22}
-    .task-icon{width:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
-    .task-id{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .task-err{font-size:.56rem;color:var(--red);white-space:nowrap;flex-shrink:0}
-    .task-rt{font-size:.52rem;color:var(--dim);white-space:nowrap;flex-shrink:0}
-    /* Collapse */
-    .collapse-hdr{display:flex;justify-content:space-between;align-items:center;
-      cursor:pointer;padding:4px 0;user-select:none}
-    .collapse-hdr:hover .collapse-btn{border-color:var(--cyan);color:var(--cyan)}
-    .collapse-btn{background:none;border:1px solid var(--border);color:var(--dim);
-      border-radius:6px;padding:3px 10px;font-size:.55rem;cursor:pointer;
-      font-family:var(--font);transition:.2s;white-space:nowrap}
-
-    /* ── Live activity line ── */
-    .activity-wrap{margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-    .activity-text{font-family:var(--mono);font-size:.63rem;color:var(--text);
-      animation:fadein .3s ease}
-    @keyframes fadein{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
-    /* result badges */
-    .prb{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:5px;
-      font-size:.53rem;font-weight:700;border:1px solid;text-transform:uppercase;letter-spacing:.4px;
-      font-family:var(--mono)}
-    .prb-pass{color:var(--lime);border-color:rgba(57,255,20,.3);background:rgba(57,255,20,.08)}
-    .prb-fail{color:var(--red);border-color:rgba(255,49,49,.3);background:rgba(255,49,49,.08)}
-    .prb-pend{color:var(--dim);border-color:rgba(255,255,255,.1);background:rgba(255,255,255,.03)}
+    /* ── FOOTER ── */
+    .footer{text-align:center;font-size:.65rem;color:#334155;padding:4px}
+    .blink{animation:pulse 1.4s infinite}
   </style>
 </head>
 <body>
-<div class="overlay" id="overlay" onclick="closeDrawer()"></div>
-<div class="drawer" id="drawer">
-  <button class="close-btn" onclick="closeDrawer()">✕ Close</button>
-  <div id="drawer-content"></div>
-</div>
+<div class="wrap">
 
-<div class="shell">
-  <!-- ═══ SIDEBAR ═══ -->
-  <aside class="sidebar">
-    <div class="brand">Evolution<br>Control</div>
-    <div id="live-badge"></div>
-    <div style="font-size:.54rem;color:var(--dim);margin-top:-4px" id="last-upd-label">Polling…</div>
-    <div id="run-state-banner" style="display:none;margin-top:6px;padding:8px 10px;
-      border-radius:8px;border:1px solid rgba(255,255,255,.1)">
-      <div id="run-state-icon" style="font-size:.85rem;font-weight:800;letter-spacing:.5px"></div>
-      <div id="run-state-sub" style="font-size:.52rem;color:#94a3b8;margin-top:2px"></div>
+  <!-- HEADER -->
+  <div class="header">
+    <div class="brand">Self-Replicating <span>Agent</span></div>
+    <div class="header-links">
+      <a href="/code" class="link-btn">📂 Code Browser</a>
     </div>
-    <div style="height:1px;background:var(--border);margin:4px 0"></div>
-    <h2>Generations</h2>
-    <div id="gen-nav" style="display:flex;flex-direction:column;gap:8px"></div>
-    <div style="height:1px;background:var(--border);margin:8px 0"></div>
-    <a href="/code" target="_blank" style="display:flex;align-items:center;gap:8px;padding:9px 12px;
-      border-radius:10px;border:1px solid rgba(0,243,255,.2);background:rgba(0,243,255,.05);
-      color:var(--cyan);text-decoration:none;font-size:.65rem;font-weight:700;transition:.2s"
-      onmouseover="this.style.background='rgba(0,243,255,.12)'"
-      onmouseout="this.style.background='rgba(0,243,255,.05)'">
-      <span>📂</span><span>Code Browser</span>
-    </a>
-  </aside>
+  </div>
 
-  <!-- ═══ MAIN ═══ -->
-  <main class="main">
-
-    <!-- TIMELINE — at top so spinner is immediately visible -->
-    <div class="card" style="padding:14px 22px">
-      <div class="card-title" style="margin-bottom:10px">📍 Generation Timeline</div>
-      <div class="timeline" id="timeline"></div>
-    </div>
-
-    <!-- GEN DETAIL -->
-    <div id="gen-detail"></div>
-
-    <!-- EVOLUTION CONTROLS CARD -->
-    <div class="card" id="controls-card">
-      <div class="card-title">⚙️ Evolution Controls</div>
-      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">
-
-        <!-- Native model select — avoids all stacking-context issues -->
-        <div style="flex:1;min-width:260px">
-          <div style="font-size:.65rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">
-            LLM Model
-          </div>
-          <select id="model-picker-select" onchange="selectModel(this.value)" style="
-            width:100%;background:#0d0e20;border:1px solid rgba(0,243,255,.3);
-            border-radius:8px;color:#e0e0e0;padding:9px 13px;font-size:.8rem;
-            cursor:pointer;font-family:inherit;outline:none">
-            <option value="">— select model —</option>
-            <optgroup label="── GEMINI (Google Free Tier) ──">
-              <option value="gemini-2.0-flash">● Gemini 2.0 Flash — 1500rpd/15rpm</option>
-              <option value="gemini-2.0-flash-lite">● Gemini 2.0 Flash Lite — 1500rpd/30rpm</option>
-            </optgroup>
-            <optgroup label="── GROQ (Free Tier) ──">
-              <option value="meta-llama/llama-4-scout-17b-16e-instruct">● Llama 4 Scout 17B — 500k/30k</option>
-              <option value="llama-3.1-8b-instant">● Llama 3.1 8B Instant — 500k/20k</option>
-              <option value="llama-3.3-70b-versatile">● Llama 3.3 70B Versatile — 100k/12k</option>
-            </optgroup>
-          </select>
-          <div id="model-status-hint" style="font-size:.6rem;color:#64748b;margin-top:5px;min-height:14px"></div>
+  <!-- STATUS CARD -->
+  <div class="status-card">
+    <div class="status-row">
+      <span id="status-badge" class="status-badge badge-default"><span class="dot"></span>LOADING</span>
+      <div>
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <span id="gen-num" class="status-gen">Gen 1</span>
+          <span id="progress-text" class="status-progress">0 / 20</span>
         </div>
-
-        <!-- Buttons -->
-        <div style="display:flex;gap:10px;flex-shrink:0;flex-wrap:wrap">
-          <button id="btn-set-model" onclick="setModel()" style="
-            background:rgba(0,243,255,.1);border:1px solid rgba(0,243,255,.4);
-            color:#00f3ff;border-radius:8px;padding:9px 18px;font-size:.78rem;
-            font-family:inherit;cursor:pointer;transition:.2s"
-            onmouseover="this.style.background='rgba(0,243,255,.2)'"
-            onmouseout="this.style.background='rgba(0,243,255,.1)'">
-            💾 Apply Model
-          </button>
-          <button id="btn-stop" onclick="stopEvolution()" style="
-            background:rgba(255,49,49,.08);border:1px solid rgba(255,49,49,.4);
-            color:#ff3131;border-radius:8px;padding:9px 18px;font-size:.78rem;
-            font-family:inherit;cursor:pointer;transition:.2s"
-            onmouseover="this.style.background='rgba(255,49,49,.2)'"
-            onmouseout="this.style.background='rgba(255,49,49,.08)'">
-            ⏹ Stop
-          </button>
-          <button id="btn-restart" onclick="restartEvolution()" style="
-            background:rgba(255,0,255,.08);border:1px solid rgba(255,0,255,.35);
-            color:#ff00ff;border-radius:8px;padding:9px 18px;font-size:.78rem;
-            font-family:inherit;cursor:pointer;transition:.2s"
-            onmouseover="this.style.background='rgba(255,0,255,.18)'"
-            onmouseout="this.style.background='rgba(255,0,255,.08)'">
-            🔄 Start Fresh
-          </button>
-        </div>
-
-        <!-- Status message -->
-        <div id="ctrl-status" style="
-          width:100%;font-size:.72rem;min-height:18px;padding-top:2px;
-          transition:color .3s"></div>
+        <div id="task-label" class="status-task">–</div>
       </div>
     </div>
 
-    <!-- TOKEN BUDGET CARD -->
-    <div class="card" id="token-budget-card" style="display:none">
-      <div class="card-title">🤖 LLM Model &amp; Daily Token Budget</div>
-      <div id="token-budget-content"></div>
-    </div>
-
-    <!-- EVOLUTION IMPROVEMENTS -->
-    <div class="card" id="evo-improvements-card" style="display:none">
-      <div class="card-title">🧬 Evolution Improvements</div>
-      <div id="evo-improvements"></div>
-    </div>
-
-    <!-- HERO PROGRESS CARD -->
-      <div class="hero-top">
-        <div>
-          <div class="hero-gen" id="hero-gen-num">Gen 1</div>
-          <div class="hero-gen-label">Active Generation</div>
-          <div style="margin-top:10px" id="hero-badge"></div>
-        </div>
-        <div class="hero-right">
-          <div class="circle-wrap">
-            <svg width="110" height="110" viewBox="0 0 110 110">
-              <circle class="circle-bg" cx="55" cy="55" r="45"/>
-              <circle class="circle-fill" id="circle-fill" cx="55" cy="55" r="45"
-                stroke="url(#cg)" stroke-dashoffset="283"/>
-              <defs>
-                <linearGradient id="cg" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stop-color="#00f3ff"/>
-                  <stop offset="100%" stop-color="#ff00ff"/>
-                </linearGradient>
-              </defs>
-            </svg>
-            <div class="circle-center">
-              <div class="circle-pct" id="circle-pct">0%</div>
-              <div class="circle-sub">Done</div>
-            </div>
-          </div>
-          <div id="eta-chip"></div>
-        </div>
-      </div>
-
-      <!-- Generation progress bar -->
-      <div class="progress-section">
-        <div class="progress-meta">
-          <div class="progress-label">Generation Progress</div>
-          <div>
-            <span class="progress-count" id="pbar-done">0</span>
-            <span class="progress-total" id="pbar-total"> / 0</span>
-          </div>
-        </div>
-        <!-- Status line above bar — shows exactly what's happening right now -->
-        <div id="live-status-line" style="display:none;margin-bottom:6px;
-          font-size:.72rem;font-family:monospace;color:#00f3ff;
-          display:flex;align-items:center;gap:8px">
-          <div class="spinner spinner-cyan spinner-sm"></div>
-          <span id="live-status-text"></span>
-        </div>
-
-        <!-- Overall progress bar -->
-        <div style="font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Overall — Tasks Completed</div>
-        <div class="big-bar-track" id="big-bar-track">
-          <div class="big-bar-fill" id="big-bar-fill" style="width:0%"></div>
-        </div>
-        <div class="seg-bars" id="seg-bars" style="margin-top:6px">
-          <div class="seg-pend" style="flex:1"></div>
-        </div>
-        <div class="seg-labels">
-          <span class="seg-label" style="color:var(--lime)" id="seg-pass-label">0 passed</span>
-          <span class="seg-label" style="color:var(--red)" id="seg-fail-label">0 failed</span>
-          <span class="seg-label" id="seg-pend-label">0 pending</span>
-        </div>
-
-        <!-- Task-level progress bar -->
-        <div id="task-progress-wrap" style="display:none;margin-top:14px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <div style="font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px">Task Progress</div>
-            <div id="task-phase-label" style="font-size:.62rem;color:#fbbf24;font-weight:700;font-family:monospace"></div>
-          </div>
-          <div style="height:8px;background:rgba(255,255,255,.05);border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,.06)">
-            <div id="task-bar-fill" style="height:100%;border-radius:6px;
-              background:linear-gradient(90deg,#fbbf24,#f97316);
-              transition:width .6s ease;box-shadow:0 0 10px rgba(251,191,36,.4)"></div>
-          </div>
-          <div id="task-phase-steps" style="display:flex;justify-content:space-between;margin-top:5px;padding:0 2px"></div>
-        </div>
-      </div>
-
-
-      <!-- Pipeline Topology — inline inside hero card -->
-      <div id="topology-inline" style="display:none;margin-top:16px">
-        <div style="font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">🔧 Pipeline Topology — Generation <span id="topo-gen-num">1</span></div>
-        <div id="topology-content"></div>
-      </div>
-
-      <!-- Live ticker -->
-      <div class="ticker-wrap" id="ticker-wrap">
-        <div class="ticker-dot" id="ticker-dot"></div>
-        <div class="ticker-text" id="ticker-text">Waiting for evolution to start…</div>
-      </div>
-
-      <!-- Live activity (phase text + result badges) — shown only when RUNNING -->
-      <div class="activity-wrap" id="activity-wrap" style="display:none">
-        <div class="spinner spinner-cyan" style="width:10px;height:10px;flex-shrink:0"></div>
-        <div class="activity-text" id="activity-text"></div>
-        <div id="activity-badges" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-      </div>
-
-      <!-- Mini stats -->
-      <div class="mini-stats">
-        <div class="mini-stat">
-          <div class="mini-val" style="color:var(--lime)" id="ms-passed">0</div>
-          <div class="mini-label">Passed</div>
-        </div>
-        <div class="mini-stat">
-          <div class="mini-val" style="color:var(--red)" id="ms-failed">0</div>
-          <div class="mini-label">Failed</div>
-        </div>
-        <div class="mini-stat">
-          <div class="mini-val" style="color:var(--cyan)" id="ms-rate">—</div>
-          <div class="mini-label">Pass Rate</div>
-        </div>
-        <div class="mini-stat">
-          <div class="mini-val" style="color:var(--amber)" id="ms-gen">1</div>
-          <div class="mini-label">Generation</div>
-        </div>
+    <!-- Rate-limit wait alert -->
+    <div class="wait-alert" id="wait-alert">
+      <span style="font-size:1.2rem;flex-shrink:0">⏳</span>
+      <div>
+        <strong>Waiting for API rate limits to clear</strong>
+        <div id="wait-detail">All LLM models are temporarily exhausted. Evolution resumes automatically.</div>
+        <div id="wait-models" class="models-list"></div>
       </div>
     </div>
 
-    <!-- TASK SUMMARY + CODE TABS -->
-    <div class="card" id="task-tabs-card" style="display:none">
-      <div class="tab-bar">
-        <button class="tab-btn active" id="tab-btn-summary" onclick="switchTab('summary')">📋 Summary</button>
-        <button class="tab-btn" id="tab-btn-code" onclick="switchTab('code')">💻 Code Generated</button>
+    <!-- Progress bar -->
+    <div class="progress-section">
+      <div class="bar-track"><div class="bar-fill" id="bar-fill" style="width:0%"></div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="stats-row">
+          <span>✅ <span class="stat-pass" id="pass-count">0</span> passed</span>
+          <span>❌ <span class="stat-fail" id="fail-count">0</span> failed</span>
+          <span id="pass-rate" style="color:#64748b"></span>
+        </div>
+        <div class="progress-meta" id="last-updated"></div>
       </div>
-      <div id="tab-pane-summary"></div>
-      <div id="tab-pane-code" style="display:none"></div>
     </div>
+  </div>
 
+  <!-- MODEL STATUS -->
+  <div class="model-card">
+    <h2>LLM Models</h2>
+    <div class="model-row">
+      <span class="model-name" id="active-model">–</span>
+      <span class="model-tag" id="active-provider">–</span>
+    </div>
+    <div class="rate-chips" id="model-chips"></div>
+  </div>
 
-  </main>
+  <!-- CONTROLS -->
+  <div class="controls">
+    <h2>Controls</h2>
+    <div class="controls-row">
+      <select id="model-select" class="model-select">
+        <option value="">— select model —</option>
+        <optgroup label="GEMINI (Google Free Tier)">
+          <option value="gemini-2.0-flash">Gemini 2.0 Flash — 1500 req/day</option>
+          <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite — 1500 req/day</option>
+        </optgroup>
+        <optgroup label="GROQ (Free Tier)">
+          <option value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B — 500k TPD</option>
+          <option value="llama-3.1-8b-instant">Llama 3.1 8B Instant — 500k TPD</option>
+          <option value="llama-3.3-70b-versatile">Llama 3.3 70B Versatile — 100k TPD</option>
+        </optgroup>
+      </select>
+      <button class="btn btn-apply" id="btn-apply" onclick="applyModel()">💾 Apply</button>
+      <button class="btn btn-stop"  id="btn-stop"  onclick="stopEvolution()">⏹ Stop</button>
+      <button class="btn btn-restart" id="btn-restart" onclick="restartEvolution()">🔄 Start Fresh</button>
+    </div>
+    <div class="ctrl-msg" id="ctrl-msg"></div>
+  </div>
+
+  <!-- TASK TABLE -->
+  <div class="task-card">
+    <h2>Tasks — Generation <span id="tasks-gen">1</span></h2>
+    <div class="task-filters">
+      <span class="filter active" data-f="all" onclick="setFilter('all')">All</span>
+      <span class="filter" data-f="pass" onclick="setFilter('pass')">✅ Passed</span>
+      <span class="filter" data-f="fail" onclick="setFilter('fail')">❌ Failed</span>
+      <span class="filter" data-f="pending" onclick="setFilter('pending')">⏳ Pending</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Task ID</th>
+        <th>Description</th>
+        <th>Status</th>
+        <th>Error</th>
+        <th>Time</th>
+      </tr></thead>
+      <tbody id="task-tbody"></tbody>
+    </table>
+    <div id="task-empty" style="padding:20px;text-align:center;color:#334155;font-size:.75rem">
+      Loading task list…
+    </div>
+  </div>
+
+  <div class="footer">Auto-refreshes every 3s &nbsp;·&nbsp; <span class="blink" id="live-dot">●</span> live</div>
 </div>
 
 <script>
-/* ── Evolution Controls ─────────────────────────────────────────────────── */
-// Gemini = primary, Groq = fallback
-var _GROQ_MODELS=[
-  {id:'gemini-2.0-flash',      name:'Gemini 2.0 Flash',      tpd:'1500rpd', tpm:'15rpm', provider:'gemini'},
-  {id:'gemini-2.0-flash-lite', name:'Gemini 2.0 Flash Lite', tpd:'1500rpd', tpm:'30rpm', provider:'gemini'},
-  {id:'meta-llama/llama-4-scout-17b-16e-instruct', name:'Llama 4 Scout 17B',       tpd:'500k',  tpm:'30k',   provider:'groq'},
-  {id:'llama-3.1-8b-instant',                       name:'Llama 3.1 8B Instant',    tpd:'500k',  tpm:'20k',   provider:'groq'},
-  {id:'llama-3.3-70b-versatile',                    name:'Llama 3.3 70B Versatile', tpd:'100k',  tpm:'12k',   provider:'groq'},
-];
-var _selectedModel='';
+var STATE = {hb: null, ms: null, prog: null, ri: null};
+var _filter = 'all';
 
-function setCtrlStatus(msg,color){
-  var el=document.getElementById('ctrl-status');
-  if(el){el.textContent=msg;el.style.color=color||'#00f3ff';}
+/* ── Fetch helpers ── */
+async function loadJSON(url) {
+  try {
+    var r = await fetch(url + '?_=' + Date.now());
+    if (!r.ok) return null;
+    return await r.json();
+  } catch(e) { return null; }
 }
 
-/* Update status labels on the static <option> elements + hint line */
-function renderModelPicker(){
-  var ms=STATE.modelStatus||{};
-  var active=ms.active||'';
-  var exhausted=ms.tpd_exhausted||[];
-  var unavailable=ms.unavailable||[];
-  var geminiEnabled=ms.gemini_enabled||false;
-
-  var sel=document.getElementById('model-picker-select');
-  var hint=document.getElementById('model-status-hint');
-  if(!sel)return;
-
-  // Update each option's label text with live status
-  Array.prototype.forEach.call(sel.options,function(opt){
-    if(!opt.value)return; // skip placeholder
-    var m=_GROQ_MODELS.find(function(x){return x.id===opt.value;});
-    if(!m)return;
-    var isActive=(m.id===active);
-    var isExhausted=(exhausted.indexOf(m.id)>=0);
-    var isUnavail=(unavailable.indexOf(m.id)>=0);
-    var isGemini=(m.provider==='gemini');
-    var noKey=isGemini&&!geminiEnabled;
-
-    var prefix= noKey?'⚠ ':isUnavail?'✕ ':isExhausted?'⬤ ':'● ';
-    var suffix= isActive?' [ACTIVE]':noKey?' [no key]':isExhausted?' [exhausted]':isUnavail?' [unavailable]':'';
-    opt.text=prefix+m.name+' — '+m.tpd+'/'+m.tpm+suffix;
-  });
-
-  // Sync select value with _selectedModel
-  if(_selectedModel&&sel.value!==_selectedModel)sel.value=_selectedModel;
-
-  // Update hint line for currently selected model
-  if(hint){
-    var selModel=_GROQ_MODELS.find(function(x){return x.id===_selectedModel;});
-    if(!selModel){
-      hint.textContent='';
-    } else {
-      var sg=selModel.provider==='gemini';
-      var nk=sg&&!geminiEnabled;
-      if(nk)
-        hint.innerHTML='<span style="color:#f59e0b">⚠ Add GoogleAPIKey / GEMINI_API_KEY as HF Space secret</span>';
-      else if(exhausted.indexOf(selModel.id)>=0)
-        hint.innerHTML='<span style="color:#ff3131">⬤ Token limit reached — auto-fallback active</span>';
-      else if(unavailable.indexOf(selModel.id)>=0)
-        hint.innerHTML='<span style="color:#64748b">✕ Unavailable on this account</span>';
-      else
-        hint.innerHTML='<span style="color:#39ff14">● Available</span>';
-    }
-  }
-}
-
-/* toggleModelPicker / closePicker removed — native <select> handles open/close natively */
-
-function selectModel(id){
-  _selectedModel=id;
-  var m=_GROQ_MODELS.find(function(x){return x.id===id;})||{name:id};
-  renderModelPicker(); // refresh hint line
-  if(id) setCtrlStatus('Model "'+m.name+'" selected — click Apply to save.','#ffb300');
-}
-
-async function setModel(){
-  if(!_selectedModel){setCtrlStatus('Please select a model first.','#ff3131');return;}
-  setCtrlStatus('Saving…','#ffb300');
-  try{
-    var r=await fetch('/api/config',{method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'set_model',model:_selectedModel})});
-    var d=await r.json();
-    if(d.ok){
-      setCtrlStatus('✓ Model saved. Click "Start Fresh" to apply it.','#39ff14');
-    } else {
-      setCtrlStatus('Error: '+(d.error||'unknown'),'#ff3131');
-    }
-  }catch(e){setCtrlStatus('Request failed: '+e.message,'#ff3131');}
-}
-
-async function stopEvolution(){
-  var btn=document.getElementById('btn-stop');
-  if(!confirm('Stop the evolution?\n\nThe current generation will halt at the next task boundary. Use "Start Fresh" to resume.')) return;
-  if(btn)btn.disabled=true;
-  setCtrlStatus('Sending stop signal…','#ff3131');
-  try{
-    var r=await fetch('/api/config',{method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'stop'})});
-    var d=await r.json();
-    if(d.ok){
-      setCtrlStatus('⏹ Evolution stopped. Click Start Fresh to restart.','#ff3131');
-      setTimeout(function(){if(btn)btn.disabled=false;},3000);
-    } else {
-      setCtrlStatus('Error: '+(d.error||'unknown'),'#ff3131');
-      if(btn)btn.disabled=false;
-    }
-  }catch(e){
-    setCtrlStatus('Request failed: '+e.message,'#ff3131');
-    if(btn)btn.disabled=false;
-  }
-}
-
-async function restartEvolution(){
-  var btn=document.getElementById('btn-restart');
-  if(btn)btn.disabled=true;
-  setCtrlStatus('Restarting evolution…','#ffb300');
-  try{
-    var r=await fetch('/api/config',{method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'restart'})});
-    var d=await r.json();
-    if(d.ok){
-      setCtrlStatus('✓ Evolution restarting — dashboard refreshing…','#00f3ff');
-      setTimeout(function(){if(btn)btn.disabled=false;},8000);
-    } else {
-      setCtrlStatus('Error: '+(d.error||'unknown'),'#ff3131');
-      if(btn)btn.disabled=false;
-    }
-  }catch(e){
-    setCtrlStatus('Request failed: '+e.message,'#ff3131');
-    if(btn)btn.disabled=false;
-  }
-}
-
-/* Sync native select with live model_status.json */
-function syncModelSelector(){
-  var ms=STATE.modelStatus||{};
-  var active=ms.active||'';
-  // Auto-select active model if user hasn't chosen manually
-  if(active&&!_selectedModel){
-    _selectedModel=active;
-  }
-  // Always populate options regardless of whether system is running
-  renderModelPicker();
-  // Keep the <select> element in sync with _selectedModel
-  var sel=document.getElementById('model-picker-select');
-  if(sel&&_selectedModel&&sel.value!==_selectedModel)sel.value=_selectedModel;
-}
-
-/* ── Main State ─────────────────────────────────────────────────────────── */
-var STATE={heartbeat:null,evolutionLog:[],benchmarkMatrix:null,activeGen:null,
-  genProgress:{},    // gen_num → {task_list, results, descriptions}
-  tokenUsage:null,   // data/token_usage.json content
-  modelStatus:null,  // data/model_status.json content
-  runInfo:null,      // data/run_info.json — written fresh on every Start Fresh
-  geminiAvailable:false,  // true if GEMINI_API_KEY secret is set (from /api/models)
-  groqAvailable:true,     // true if GROQ_API_KEY secret is set
-  collapsed:new Set(),   // gens collapsed by user or auto
-  userExpanded:new Set(), // gens user explicitly opened
-  activeTab:'summary',   // 'summary' | 'code'
-  lastCode:null          // {gen, task_id, final_code, stdout, stderr, error_type, phase_results}
-};
-var PREV_TASK='';
-var TASK_START=null;
-var TASK_PHASE_START=null;  // when current task started (for elapsed timer)
-
-// Fraction of a task represented by each phase (0→1 across the pipeline)
-var PHASE_FRACTION={
-  'thinking':0.15, 'writing_unit_tests':0.30, 'writing_code':0.55,
-  'reviewing':0.65, 'revising':0.72, 'compiling':0.85,
-  'running_unit_tests':0.92, 'debugging':0.96, 'running_integration_tests':0.99
-};
-var COLORS=['#00f3ff','#ff00ff','#39ff14','#ffb300','#ff3131','#a78bfa','#fb7185'];
-
-async function loadJSON(p){
-  try{var r=await fetch(p+'?_='+Date.now());if(!r.ok)return null;return await r.json();}
-  catch(e){return null;}
-}
-
-async function refresh(){
-  var results=await Promise.all([
+async function refresh() {
+  var [hb, ms, prog, ri] = await Promise.all([
     loadJSON('data/heartbeat.json'),
-    loadJSON('data/evolution_log.json'),
-    loadJSON('data/benchmark_matrix.json'),
-    loadJSON('data/token_usage.json'),
     loadJSON('data/model_status.json'),
-    loadJSON('api/models'),
-    loadJSON('data/run_info.json')
+    loadJSON('data/gen_1_progress.json'),
+    loadJSON('data/run_info.json'),
   ]);
-  if(results[0])STATE.heartbeat=results[0];
-  if(results[1])STATE.evolutionLog=Array.isArray(results[1])?results[1]:[];
-  if(results[2])STATE.benchmarkMatrix=results[2];
-  if(results[3])STATE.tokenUsage=results[3];
-  if(results[4])STATE.modelStatus=results[4];
-  if(results[5]){
-    // /api/models now returns {models, gemini_available, groq_available}
-    STATE.geminiAvailable=results[5].gemini_available||false;
-    STATE.groqAvailable=results[5].groq_available||false;
-    // Merge gemini_available into modelStatus so renderModelPicker sees it
-    if(!STATE.modelStatus)STATE.modelStatus={};
-    STATE.modelStatus.gemini_enabled=STATE.geminiAvailable;
-  }
-  if(results[6])STATE.runInfo=results[6];
+  if (hb)   STATE.hb   = hb;
+  if (ms)   STATE.ms   = ms;
+  if (prog) STATE.prog = prog;
+  if (ri)   STATE.ri   = ri;
 
-  // Load progress for all known gens
-  var knownGens=getKnownGens();
-  await Promise.all(knownGens.map(async function(g){
-    var p=await loadJSON('data/gen_'+g+'_progress.json');
-    if(p)STATE.genProgress[g]=p;
-  }));
-
-  // Auto-collapse gens that are no longer active (unless user explicitly expanded)
-  if(STATE.heartbeat){
-    var ag=STATE.heartbeat.active_gen||1;
-    knownGens.forEach(function(g){
-      if(g<ag&&!STATE.userExpanded.has(g))STATE.collapsed.add(g);
-    });
-  }
-
-  if(STATE.activeGen===null&&STATE.heartbeat)STATE.activeGen=STATE.heartbeat.active_gen||1;
-  renderAll();
-  document.getElementById('last-upd-label').textContent='Updated '+new Date().toLocaleTimeString();
+  renderStatus();
+  renderModels();
+  renderTasks();
+  renderWaitAlert();
+  document.getElementById('live-dot').style.opacity = Math.random() > .5 ? '1' : '.4';
 }
 
-function renderAll(){
-  renderHero();
-  renderSidebarNav();
-  renderTimeline();
-  if(STATE.activeGen!==null)renderGenDetail(STATE.activeGen);
-  renderTokenBudget();
-  syncModelSelector();
-  renderImprovements();
-  renderTaskTabs();
-  renderTopology();
-  renderRunInfo();
+/* ── STATUS ── */
+function renderStatus() {
+  var hb = STATE.hb;
+  if (!hb) return;
+
+  var status = hb.status || '';
+  var badge = document.getElementById('status-badge');
+  var classMap = {
+    RUNNING: 'badge-running', ANALYSING: 'badge-analysing',
+    SPAWNING: 'badge-spawning', DONE: 'badge-done',
+    STOPPED: 'badge-stopped', WAITING: 'badge-waiting',
+    SPAWN_FAILED: 'badge-stopped'
+  };
+  badge.className = 'status-badge ' + (classMap[status] || 'badge-default');
+  badge.innerHTML = '<span class="dot"></span>' + status;
+
+  // Override badge for run_info stopped state
+  var ri = STATE.ri;
+  if (ri && ri.status === 'stopped') {
+    badge.className = 'status-badge badge-stopped';
+    badge.innerHTML = '⏹ STOPPED';
+  } else if (ri && ri.status === 'waiting') {
+    badge.className = 'status-badge badge-waiting';
+    badge.innerHTML = '⏳ WAITING — auto-restart soon';
+  }
+
+  document.getElementById('gen-num').textContent = 'Gen ' + (hb.active_gen || 1);
+  document.getElementById('tasks-gen').textContent = hb.active_gen || 1;
+
+  var done = parseInt((hb.progress || '0/20').split('/')[0]);
+  var total = parseInt((hb.progress || '0/20').split('/')[1]);
+  document.getElementById('progress-text').textContent = done + ' / ' + total;
+  document.getElementById('bar-fill').style.width = (total ? (done/total*100) : 0) + '%';
+  document.getElementById('pass-count').textContent = hb.passed_so_far || 0;
+  document.getElementById('fail-count').textContent = hb.failed_so_far || 0;
+
+  var passRate = hb.pass_rate_so_far || 0;
+  document.getElementById('pass-rate').textContent =
+    done > 0 ? (passRate*100).toFixed(1) + '% pass rate' : '';
+
+  var taskLabel = '';
+  if (hb.active_task_id) {
+    taskLabel = '▶ ' + hb.active_task_id;
+    if (hb.current_phase) taskLabel += '  ·  phase: ' + hb.current_phase;
+  } else if (status === 'ANALYSING') {
+    taskLabel = '⚙ Generating Gen ' + ((hb.active_gen||1)+1) + ' source code via LLM…';
+  } else if (status === 'SPAWNING') {
+    taskLabel = '🚀 Spawning Gen ' + ((hb.active_gen||1)+1) + '…';
+  }
+  document.getElementById('task-label').textContent = taskLabel || '–';
+
+  // Last updated
+  var lu = hb.last_updated ? new Date(hb.last_updated) : null;
+  if (lu) {
+    var secs = Math.floor((Date.now() - lu.getTime()) / 1000);
+    var txt = secs < 60 ? secs + 's ago' : Math.floor(secs/60) + 'm ' + (secs%60) + 's ago';
+    document.getElementById('last-updated').textContent = 'updated ' + txt;
+  }
 }
 
-function renderRunInfo(){
-  var banner=document.getElementById('run-state-banner');
-  var iconEl=document.getElementById('run-state-icon');
-  var subEl=document.getElementById('run-state-sub');
-  if(!banner||!iconEl||!subEl)return;
+/* ── WAIT ALERT ── */
+function renderWaitAlert() {
+  var ms = STATE.ms;
+  var alert = document.getElementById('wait-alert');
+  if (!ms || !ms.tpd_exhausted || ms.tpd_exhausted.length === 0) {
+    alert.classList.remove('show'); return;
+  }
 
-  var ri=STATE.runInfo;
-  if(!ri){banner.style.display='none';return;}
-  banner.style.display='block';
+  var ra = ms.retry_after || {};
+  var now = Date.now();
+  var times = Object.entries(ra).map(function(e) {
+    return {model: e[0], t: new Date(e[1])};
+  }).filter(function(e){ return e.t > now; })
+    .sort(function(a,b){ return a.t - b.t; });
 
-  var status=ri.status||'';
-  var now=Date.now();
+  if (times.length === 0) { alert.classList.remove('show'); return; }
 
-  if(status==='stopped'){
-    banner.style.background='rgba(255,49,49,.1)';
-    banner.style.borderColor='rgba(255,49,49,.35)';
-    iconEl.style.color='#ff3131';
-    iconEl.textContent='⏹ STOPPED';
-    var reason=ri.reason||'';
-    subEl.textContent=reason==='user_request'?'Stopped by you — click Start Fresh to restart'
-                    :reason==='stop_flag'?'Evolution halted — click Start Fresh to restart'
-                    :'Click Start Fresh to restart';
+  alert.classList.add('show');
+  var nearest = times[0];
+  var secsLeft = Math.max(0, Math.floor((nearest.t - now) / 1000));
+  var timeStr = secsLeft < 60 ? secsLeft + 's' : Math.floor(secsLeft/60) + 'm ' + (secsLeft%60) + 's';
+  document.getElementById('wait-detail').textContent =
+    'All models rate-limited. Fastest recovery: ' +
+    nearest.model.split('/').pop() + ' in ' + timeStr + ' — evolution resumes automatically.';
 
-  } else if(status==='starting'){
-    banner.style.background='rgba(251,191,36,.1)';
-    banner.style.borderColor='rgba(251,191,36,.35)';
-    iconEl.style.color='#fbbf24';
-    iconEl.textContent='⚡ STARTING FRESH…';
-    subEl.textContent='Clearing data, launching Gen 1…';
+  var lines = times.map(function(e) {
+    var s = Math.max(0, Math.floor((e.t - now)/1000));
+    var t = s < 60 ? s+'s' : Math.floor(s/60)+'m';
+    return e.model.split('/').pop() + ' → ' + t;
+  });
+  document.getElementById('wait-models').textContent = lines.join('   ');
+}
 
-  } else if(status==='running'){
-    banner.style.background='rgba(57,255,20,.06)';
-    banner.style.borderColor='rgba(57,255,20,.25)';
-    iconEl.style.color='#39ff14';
-    var startedAt=ri.started_at?new Date(ri.started_at):null;
-    var timeStr=startedAt?startedAt.toLocaleTimeString():'';
-    iconEl.textContent='▶ RUNNING';
-    if(startedAt){
-      var secs=Math.floor((now-startedAt.getTime())/1000);
-      var elapsed=secs<60?secs+'s':secs<3600?Math.floor(secs/60)+'m '+secs%60+'s':Math.floor(secs/3600)+'h '+Math.floor((secs%3600)/60)+'m';
-      subEl.textContent='Started '+timeStr+' ('+elapsed+' ago)';
+/* ── MODELS ── */
+function renderModels() {
+  var ms = STATE.ms;
+  if (!ms) return;
+
+  var shortName = (ms.active || '–').split('/').pop();
+  document.getElementById('active-model').textContent = shortName;
+  document.getElementById('active-provider').textContent = ms.provider || '–';
+
+  var all = (ms.all_models || []);
+  var exhausted = ms.tpd_exhausted || [];
+  var ra = ms.retry_after || {};
+  var now = Date.now();
+
+  var html = all.map(function(m) {
+    var short = m.split('/').pop();
+    var isEx = exhausted.indexOf(m) >= 0;
+    var raT = ra[m] ? new Date(ra[m]) : null;
+    var secs = raT ? Math.max(0, Math.floor((raT - now)/1000)) : 0;
+
+    if (!isEx) {
+      return '<span class="chip chip-ok">✓ ' + short + '</span>';
+    } else if (secs > 0) {
+      var t = secs < 60 ? secs+'s' : Math.floor(secs/60)+'m';
+      return '<span class="chip chip-warn">⏳ ' + short + ' ('+t+')</span>';
     } else {
-      subEl.textContent='Started '+timeStr;
+      return '<span class="chip chip-dead">✕ ' + short + '</span>';
     }
+  }).join('');
 
-  } else if(status==='waiting'){
-    banner.style.background='rgba(99,102,241,.1)';
-    banner.style.borderColor='rgba(99,102,241,.35)';
-    iconEl.style.color='#818cf8';
-    iconEl.textContent='⏳ WAITING…';
-    var resumeAt=ri.resume_at?new Date(ri.resume_at):null;
-    if(resumeAt){
-      var secsLeft=Math.max(0,Math.floor((resumeAt.getTime()-now)/1000));
-      var mLeft=Math.floor(secsLeft/60), sLeft=secsLeft%60;
-      subEl.textContent='Auto-restart in '+mLeft+'m '+sLeft+'s';
+  document.getElementById('model-chips').innerHTML = html;
+}
+
+/* ── TASK TABLE ── */
+function setFilter(f) {
+  _filter = f;
+  document.querySelectorAll('.filter').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.f === f);
+  });
+  renderTasks();
+}
+
+function renderTasks() {
+  var prog = STATE.prog;
+  var hb = STATE.hb;
+  if (!prog) return;
+
+  var taskList = prog.task_list || [];
+  var results = prog.results || {};
+  var descs = prog.descriptions || {};
+  var activeTask = hb ? hb.active_task_id : '';
+
+  var rows = taskList.map(function(tid) {
+    var r = results[tid];
+    var isActive = tid === activeTask && !r;
+    var desc = descs[tid] || '';
+
+    var rowStatus, pill, rowClass;
+    if (r) {
+      rowStatus = r.status === 'pass' ? 'pass' : 'fail';
+      pill = r.status === 'pass'
+        ? '<span class="pill pill-pass">PASS</span>'
+        : '<span class="pill pill-fail">FAIL</span>';
+      rowClass = r.status === 'pass' ? 't-pass' : 't-fail';
+    } else if (isActive) {
+      rowStatus = 'running';
+      pill = '<span class="pill pill-run">RUNNING</span>';
+      rowClass = 't-active';
     } else {
-      subEl.textContent='Lineage complete — auto-restarting soon';
+      rowStatus = 'pending';
+      pill = '<span class="pill pill-wait">–</span>';
+      rowClass = 't-pending';
     }
 
-  } else {
-    banner.style.display='none';
-  }
-}
-
-/* ══ TABS: SUMMARY + CODE ══ */
-function switchTab(tab){
-  STATE.activeTab=tab;
-  ['summary','code'].forEach(function(t){
-    document.getElementById('tab-btn-'+t).classList.toggle('active',t===tab);
-    document.getElementById('tab-pane-'+t).style.display=t===tab?'block':'none';
-  });
-  if(tab==='code') fetchAndRenderCode();
-}
-
-function renderTaskTabs(){
-  var hb=STATE.heartbeat;
-  var card=document.getElementById('task-tabs-card');
-  if(!hb||(hb.status!=='RUNNING'&&hb.status!=='ANALYSING')){card.style.display='none';return;}
-  card.style.display='block';
-  if(STATE.activeTab==='summary') renderSummaryPane();
-  else fetchAndRenderCode();
-}
-
-function renderSummaryPane(){
-  var hb=STATE.heartbeat;
-  if(!hb)return;
-  var gen=hb.active_gen;
-  var tid=hb.active_task_id||'';
-  var progress=STATE.genProgress[gen]||{};
-  var descs=progress.descriptions||{};
-  var desc=descs[tid]||tid||'—';
-  var pr=hb.phase_results||{};
-  var phase=hb.current_phase||'';
-
-  // What went right
-  var rights=[];
-  if(pr.compile===true) rights.push('Compilation passed');
-  if(pr.unit_tests===true) rights.push('Unit tests passed');
-  if(pr.integration_tests===true) rights.push('Integration tests passed');
-
-  // What went wrong
-  var wrongs=[];
-  if(pr.compile===false) wrongs.push('Compilation failed');
-  if(pr.unit_tests===false) wrongs.push('Unit tests failed');
-  if(pr.integration_tests===false) wrongs.push('Integration tests failed');
-
-  function phaseBox(label,val){
-    var cls=val===true?'ok':val===false?'fail':'pend';
-    var icon=val===true?'✓':val===false?'✗':'—';
-    return '<div class="phase-check '+cls+'"><div style="font-size:.9rem">'+icon+'</div><div>'+label+'</div></div>';
-  }
-
-  var html=
-    '<div class="summary-section">'+
-      '<div class="summary-title">Current Task</div>'+
-      '<div class="summary-desc">'+desc+
-        (tid?'<span style="font-size:.58rem;color:var(--dim);margin-left:8px">'+tid+'</span>':'')+
-      '</div>'+
-      (phase?'<div style="font-size:.62rem;color:var(--cyan);margin-bottom:10px">'+phaseLabel(phase)+'</div>':'')+
-    '</div>'+
-    '<div class="phase-check-grid">'+
-      phaseBox('Compilation',pr.compile===undefined?null:pr.compile)+
-      phaseBox('Unit Tests',pr.unit_tests===undefined?null:pr.unit_tests)+
-      phaseBox('Integration Tests',pr.integration_tests===undefined?null:pr.integration_tests)+
-    '</div>';
-
-  if(rights.length){
-    html+='<div style="margin-top:14px"><div class="summary-title" style="color:var(--lime)">✅ What Went Right</div>'+
-      rights.map(function(r){return '<div class="check-row"><span class="check-icon" style="color:var(--lime)">✓</span>'+r+'</div>';}).join('')+
-    '</div>';
-  }
-  if(wrongs.length){
-    html+='<div style="margin-top:10px"><div class="summary-title" style="color:var(--red)">❌ What Went Wrong</div>'+
-      wrongs.map(function(w){return '<div class="check-row"><span class="check-icon" style="color:var(--red)">✗</span>'+w+'</div>';}).join('')+
-    '</div>';
-  }
-  if(!rights.length&&!wrongs.length&&!phase){
-    html+='<div style="color:var(--dim);font-size:.65rem;margin-top:10px">Waiting for task to start…</div>';
-  }
-
-  document.getElementById('tab-pane-summary').innerHTML=html;
-}
-
-async function fetchAndRenderCode(){
-  var hb=STATE.heartbeat;
-  if(!hb)return;
-  var gen=hb.active_gen;
-  // Show code for last completed task (most recently in progress.results) or active task
-  var progress=STATE.genProgress[gen]||{};
-  var completed=Object.keys(progress.results||{});
-  var tid=completed.length?completed[completed.length-1]:(hb.active_task_id||'');
-  if(!tid){document.getElementById('tab-pane-code').innerHTML='<div style="color:var(--dim);font-size:.65rem">No completed tasks yet.</div>';return;}
-
-  // Use cache if same task
-  if(STATE.lastCode&&STATE.lastCode.gen===gen&&STATE.lastCode.task_id===tid){
-    _renderCodePane(STATE.lastCode);return;
-  }
-  document.getElementById('tab-pane-code').innerHTML='<div style="color:var(--dim);font-size:.65rem">Loading…</div>';
-  var result=await loadJSON('generations/gen_'+gen+'/results/'+tid+'_result.json');
-  if(result){
-    STATE.lastCode={gen:gen,task_id:tid,final_code:result.final_code||'',
-      stdout:result.stdout||'',stderr:result.stderr||'',
-      error_type:result.error_type||'',phase_results:result.phase_results||{}};
-    _renderCodePane(STATE.lastCode);
-  } else {
-    document.getElementById('tab-pane-code').innerHTML='<div style="color:var(--dim);font-size:.65rem">Result file not available yet.</div>';
-  }
-}
-
-function _renderCodePane(data){
-  var desc=(STATE.genProgress[data.gen]&&STATE.genProgress[data.gen].descriptions&&STATE.genProgress[data.gen].descriptions[data.task_id])||data.task_id;
-  var code=data.final_code||'';
-  var escaped=code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  var html='<div style="font-size:.6rem;color:var(--dim);margin-bottom:8px">Last completed: <span style="color:var(--cyan)">'+desc+'</span></div>'+
-    '<div class="code-wrap">'+
-      '<button class="code-copy-btn" onclick="copyCode(this)">Copy</button>'+
-      '<pre>'+escaped+'</pre>'+
-    '</div>';
-  if(data.stderr){
-    var errEsc=data.stderr.slice(0,600).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    html+='<div style="margin-top:12px"><div class="summary-title" style="color:var(--red)">Stderr</div>'+
-      '<div class="code-wrap" style="max-height:160px"><pre style="color:#fc8181">'+errEsc+'</pre></div></div>';
-  }
-  document.getElementById('tab-pane-code').innerHTML=html;
-}
-
-function copyCode(btn){
-  var pre=btn.nextElementSibling;
-  if(navigator.clipboard){navigator.clipboard.writeText(pre.textContent);}
-  btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy';},1500);
-}
-
-/* ══ PHASE STEPS (task-level progress bar) ══ */
-var PHASE_ORDER=[
-  {phase:'thinking',      label:'Think',     agent:'analyst'},
-  {phase:'writing_unit_tests',label:'Write Tests',agent:'test_writer'},
-  {phase:'writing_code',  label:'Code',      agent:'coder'},
-  {phase:'reviewing',     label:'Review',    agent:'critic'},
-  {phase:'revising',      label:'Revise',    agent:'reviser'},
-  {phase:'compiling',     label:'Compile',   agent:'executor'},
-  {phase:'running_unit_tests',label:'Run Tests',agent:'executor'},
-  {phase:'debugging',     label:'Debug',     agent:'debugger'},
-  {phase:'running_integration_tests',label:'Integ.',agent:'executor'}
-];
-var PHASE_TO_IDX={};
-PHASE_ORDER.forEach(function(p,i){PHASE_TO_IDX[p.phase]=i;});
-
-function renderPhaseSteps(currentPhase,topo){
-  var activeIdx=PHASE_TO_IDX[currentPhase];
-  if(activeIdx===undefined)activeIdx=-1;
-  return PHASE_ORDER.map(function(p,i){
-    // Hide disabled optional agents
-    var agentKey='enable_'+p.agent;
-    var optional=(p.agent==='test_writer'||p.agent==='critic'||p.agent==='reviser'||p.agent==='debugger');
-    var enabled=!optional||(topo[agentKey]===true||topo[agentKey]==='true');
-    var cls=!enabled?'ps-skip':i<activeIdx?'ps-done':i===activeIdx?'ps-active':'';
-    var dotHtml=i===activeIdx&&enabled
-      ? '<div class="spinner spinner-cyan spinner-sm" style="margin:0 auto 2px"></div>'
-      : '<div class="phase-step-dot"></div>';
-    var doneCheck=i<activeIdx&&enabled?'<div style="font-size:.55rem;color:var(--lime)">✓</div>':'';
-    return '<div class="phase-step '+cls+'">'+
-      dotHtml+doneCheck+
-      '<div class="phase-step-txt">'+p.label+'</div>'+
-    '</div>';
-  }).join('');
-}
-
-/* ══ TOPOLOGY — node diagram ══ */
-var PHASE_TO_AGENT={
-  'thinking':'analyst','writing_unit_tests':'test_writer','writing_code':'coder',
-  'reviewing':'critic','revising':'reviser','compiling':'executor',
-  'running_unit_tests':'executor','debugging':'debugger','running_integration_tests':'executor'
-};
-
-function renderTopology(){
-  var hb=STATE.heartbeat;
-  var wrap=document.getElementById('topology-inline');
-  if(!hb||!hb.topology||!Object.keys(hb.topology).length){wrap.style.display='none';return;}
-  wrap.style.display='block';
-  document.getElementById('topo-gen-num').textContent=hb.active_gen;
-  var t=hb.topology;
-  var activeAgent=PHASE_TO_AGENT[hb.current_phase]||'';
-
-  // Pipeline node definitions in flow order
-  var nodes=[
-    {id:'analyst',    label:'Analyst',     icon:'🧠', always:true},
-    {id:'architect',  label:'Architect',   icon:'🏗️', always:true},
-    {id:'test_writer',label:'Test Writer', icon:'🧪', key:'enable_test_writer'},
-    {id:'coder',      label:'Coder',       icon:'💻', always:true},
-    {id:'critic',     label:'Critic',      icon:'🔍', key:'enable_critic'},
-    {id:'reviser',    label:'Reviser',     icon:'✏️', key:'enable_reviser'},
-    {id:'executor',   label:'Executor',    icon:'▶️', always:true},
-    {id:'debugger',   label:'Debugger',    icon:'🔧', key:'enable_debugger'},
-  ];
-
-  var parts=[];
-  nodes.forEach(function(n,i){
-    var on=n.always||(t[n.key]===true||t[n.key]==='true');
-    var isActive=n.id===activeAgent&&hb.status==='RUNNING';
-    var nodeCls='pipe-node '+(isActive?'pn-active ':'')+( n.always?'pn-always':(on?'pn-on':'pn-off'));
-    var badgeCls=n.always?'pnb-core':(on?'pnb-on':'pnb-off');
-    var badgeTxt=n.always?'core':(on?'ON':'OFF');
-
-    // Cycle badge for Critic (shows ⟳N between Critic and Reviser)
-    var cycleBadge='';
-    if(n.id==='critic'&&on&&(t['enable_reviser']===true||t['enable_reviser']==='true')){
-      cycleBadge='<div class="pipe-cycle-badge">⟳ '+(t.max_critic_reviser_cycles||'N')+' cycles</div>';
+    if (_filter !== 'all') {
+      if (_filter === 'pass' && rowStatus !== 'pass') return '';
+      if (_filter === 'fail' && rowStatus !== 'fail') return '';
+      if (_filter === 'pending' && rowStatus !== 'pending' && rowStatus !== 'running') return '';
     }
 
-    parts.push(
-      '<div class="'+nodeCls+'">'+
-        cycleBadge+
-        '<div class="pipe-node-icon">'+n.icon+'</div>'+
-        '<div class="pipe-node-label">'+n.label+'</div>'+
-        '<span class="pipe-node-badge '+badgeCls+'">'+badgeTxt+'</span>'+
-      '</div>'
-    );
+    var err = r ? (r.error_type || '') : (isActive ? (hb.current_phase || '') : '');
+    var rt  = r ? r.runtime.toFixed(1) + 's' : (isActive ? '…' : '');
 
-    if(i<nodes.length-1){
-      var connActive=isActive||(nodes[i+1].id===activeAgent&&hb.status==='RUNNING');
-      parts.push(
-        '<div class="pipe-conn">'+
-          '<div class="pipe-conn-line'+(connActive?' pc-active':'')+'"></div>'+
-          '<div class="pipe-conn-arrow'+(connActive?' pc-active':'')+'">▶</div>'+
-        '</div>'
-      );
-    }
+    return '<tr class="' + rowClass + '">'
+      + '<td class="task-id">' + tid + '</td>'
+      + '<td class="task-desc">' + esc(desc) + '</td>'
+      + '<td>' + pill + '</td>'
+      + '<td style="color:#475569">' + esc(err) + '</td>'
+      + '<td style="color:#334155">' + rt + '</td>'
+      + '</tr>';
   });
 
-  var dbgNote=t.max_debug_cycles!=null
-    ?'<div style="font-size:.56rem;color:var(--dim);margin-top:8px;padding-left:4px">Debug retry cycles: '+t.max_debug_cycles+'</div>':'' ;
-
-  document.getElementById('topology-content').innerHTML=
-    '<div class="pipeline-flow">'+parts.join('')+'</div>'+dbgNote;
+  var html = rows.filter(Boolean).join('');
+  var tbody = document.getElementById('task-tbody');
+  var empty = document.getElementById('task-empty');
+  tbody.innerHTML = html;
+  empty.style.display = html ? 'none' : 'block';
+  if (!html) empty.textContent = _filter === 'all' ? 'No tasks loaded yet.' : 'No tasks match this filter.';
 }
 
-/* ══ HERO CARD ══ */
-function renderHero(){
-  var hb=STATE.heartbeat;
-  if(!hb){
-    document.getElementById('hero-gen-num').textContent='Gen —';
-    return;
-  }
-
-  // Generation number
-  document.getElementById('hero-gen-num').textContent='Gen '+hb.active_gen;
-  document.getElementById('ms-gen').textContent=hb.active_gen;
-
-  // Badge
-  var map={RUNNING:['badge-running',true,'🟢 Running'],ANALYSING:['badge-spawning',true,'🔍 Analysing'],
-    SPAWNING:['badge-spawning',true,'🚀 Spawning'],DONE:['badge-done',false,'✅ Done'],
-    SPAWN_FAILED:['badge-fail',false,'❌ Spawn Failed']};
-  var info=map[hb.status]||['badge-idle',false,'⏸ Idle'];
-  document.getElementById('hero-badge').innerHTML=
-    '<span class="badge '+info[0]+'"><span class="dot'+(info[1]?' dot-pulse':'')+'"></span>'+info[2]+'</span>';
-  document.getElementById('live-badge').innerHTML=
-    '<span class="badge '+info[0]+'" style="font-size:.52rem"><span class="dot'+(info[1]?' dot-pulse':'')+'"></span>Gen '+hb.active_gen+' · '+hb.status+'</span>';
-
-  // Parse progress
-  var parts=(hb.progress||'0/0').split('/').map(Number);
-  var done=parts[0]||0, total=parts[1]||0;
-  var pct=total?done/total:0;
-  var passed=hb.passed_so_far||0, failed=hb.failed_so_far||0, pending=Math.max(0,total-done);
-
-  // Real progress bar — only completed tasks, no faking
-  document.getElementById('pbar-done').textContent=done;
-  document.getElementById('pbar-total').textContent=' / '+total;
-  document.getElementById('big-bar-fill').style.width=pct2str(pct);
-
-  // Track pulse glow when actively working
-  var track=document.getElementById('big-bar-track');
-  if(track){
-    if(hb.status==='RUNNING')track.classList.add('working');
-    else track.classList.remove('working');
-  }
-
-  // Live status line above the bar
-  var statusLine=document.getElementById('live-status-line');
-  var statusText=document.getElementById('live-status-text');
-  if(statusLine&&statusText){
-    if(hb.status==='RUNNING'&&hb.active_task_id){
-      var pLabel=phaseLabel(hb.current_phase||'thinking');
-      var ms=STATE.modelStatus||{};
-      var modelName=ms.active||(STATE.tokenUsage&&STATE.tokenUsage.model)||'';
-      var shortModel=modelName.split('/').pop().replace('meta-llama-','');
-      statusLine.style.display='flex';
-      statusText.textContent=pLabel+' — '+hb.active_task_id+(shortModel?' ['+shortModel+']':'');
-    } else if(hb.status==='ANALYSING'){
-      statusLine.style.display='flex';
-      statusText.textContent='Analysing results — preparing next generation…';
-    } else if(hb.status==='SPAWNING'){
-      statusLine.style.display='flex';
-      statusText.textContent='Spawning Generation '+(hb.active_gen+1)+'…';
-    } else {
-      statusLine.style.display='none';
-    }
-  }
-
-  // Segmented bar
-  if(total>0){
-    var pPct=(passed/total*100).toFixed(1)+'%';
-    var fPct=(failed/total*100).toFixed(1)+'%';
-    document.getElementById('seg-bars').innerHTML=
-      '<div class="seg-pass" style="flex:'+passed+'"></div>'+
-      '<div class="seg-fail" style="flex:'+failed+'"></div>'+
-      '<div class="seg-pend" style="flex:'+pending+'"></div>';
-  }
-  document.getElementById('seg-pass-label').textContent=passed+' passed';
-  document.getElementById('seg-fail-label').textContent=failed+' failed';
-  document.getElementById('seg-pend-label').textContent=pending+' pending';
-
-  // Circular progress
-  var circ=document.getElementById('circle-fill');
-  var offset=283-(283*pct);
-  circ.style.strokeDashoffset=offset;
-  document.getElementById('circle-pct').textContent=total?Math.round(pct*100)+'%':'0%';
-
-  // Mini stats
-  document.getElementById('ms-passed').textContent=passed;
-  document.getElementById('ms-failed').textContent=failed;
-  document.getElementById('ms-rate').textContent=total?Math.round(pct*100)+'%':'—';
-
-  // ETA chip
-  var etaEl=document.getElementById('eta-chip');
-  if(total>0&&done>0&&hb.status==='RUNNING'){
-    if(!TASK_START)TASK_START=Date.now();
-    var elapsed=(Date.now()-TASK_START)/1000;
-    var rate=done/elapsed; // tasks per sec
-    var remaining=pending/rate;
-    if(remaining>0&&remaining<86400){
-      var m=Math.floor(remaining/60), s=Math.round(remaining%60);
-      etaEl.innerHTML='<div class="eta-chip">⏱ ETA ~'+m+'m '+s+'s</div>';
-    } else { etaEl.innerHTML=''; }
-  } else { etaEl.innerHTML=''; if(done===0)TASK_START=null; }
-
-  // Ticker
-  var taskId=hb.active_task_id||'';
-  var tickerDot=document.getElementById('ticker-dot');
-  var tickerText=document.getElementById('ticker-text');
-  if(hb.status==='RUNNING'&&taskId){
-    if(taskId!==PREV_TASK){PREV_TASK=taskId;}
-    tickerDot.style.background='var(--lime)';
-    tickerText.style.color='var(--cyan)';
-    tickerText.textContent='▶ Solving: '+taskId;
-  } else if(hb.status==='ANALYSING'){
-    tickerDot.style.background='var(--amber)';
-    tickerText.style.color='var(--amber)';
-    tickerText.textContent='🔍 Analysing results — preparing Gen '+(hb.active_gen+1)+' spawn…';
-  } else if(hb.status==='SPAWNING'){
-    tickerDot.style.background='var(--magenta)';
-    tickerText.style.color='var(--magenta)';
-    tickerText.textContent='🚀 Spawning Generation '+(hb.active_gen+1)+'…';
-  } else if(hb.status==='DONE'){
-    tickerDot.style.background='var(--cyan)';
-    tickerText.style.color='var(--cyan)';
-    tickerText.textContent='✅ Generation '+hb.active_gen+' complete — '+passed+' passed, '+failed+' failed';
-  } else {
-    tickerDot.style.background='var(--dim)';
-    tickerText.style.color='var(--dim)';
-    tickerText.textContent='Waiting for evolution to start…';
-  }
-
-  // Live activity line
-  var actWrap=document.getElementById('activity-wrap');
-  var actText=document.getElementById('activity-text');
-  var actBadges=document.getElementById('activity-badges');
-  if(hb.status==='RUNNING'&&hb.current_phase){
-    actWrap.style.display='flex';
-    actText.textContent=phaseLabel(hb.current_phase);
-    actBadges.innerHTML=renderPhaseBadges(hb.phase_results||{});
-  } else {
-    actWrap.style.display='none';
-  }
-
-  // Task-level progress bar
-  var taskWrap=document.getElementById('task-progress-wrap');
-  var taskFill=document.getElementById('task-bar-fill');
-  var taskLabel=document.getElementById('task-phase-label');
-  var taskSteps=document.getElementById('task-phase-steps');
-  var TASK_PHASES=[
-    {phase:'thinking',       label:'Thinking',  pct:15},
-    {phase:'writing_code',   label:'Coding',    pct:45},
-    {phase:'reviewing',      label:'Reviewing', pct:60},
-    {phase:'revising',       label:'Revising',  pct:72},
-    {phase:'compiling',      label:'Compiling', pct:85},
-    {phase:'debugging',      label:'Debugging', pct:95},
-  ];
-  if(hb.status==='RUNNING'&&hb.active_task_id&&taskWrap){
-    taskWrap.style.display='block';
-    var cp=hb.current_phase||'thinking';
-    var found=TASK_PHASES.find(function(p){return p.phase===cp;});
-    var pct=found?found.pct:10;
-    var lbl=found?found.label:phaseLabel(cp);
-    taskFill.style.width=pct+'%';
-    taskLabel.textContent=lbl+'…';
-    // Step ticks
-    taskSteps.innerHTML=TASK_PHASES.map(function(p){
-      var active=p.phase===cp;
-      var done=p.pct<pct||(found&&p.pct===found.pct&&false);
-      var col=active?'#fbbf24':p.pct<pct?'#39ff14':'#475569';
-      return '<span style="font-size:.48rem;color:'+col+';font-weight:'+(active?'800':'400')+'">'+
-        (p.pct<pct?'✓ ':active?'▶ ':'')+p.label+'</span>';
-    }).join('');
-  } else if(taskWrap){
-    taskWrap.style.display='none';
-  if(false){  // close
-  }
-
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-/* ══ TASK LIST ══ */
-function toggleCollapse(gen,e){
-  e.stopPropagation();
-  if(STATE.collapsed.has(gen)){
-    STATE.collapsed.delete(gen);
-    STATE.userExpanded.add(gen);
-  } else {
-    STATE.collapsed.add(gen);
-    STATE.userExpanded.delete(gen);
-  }
-  renderGenDetail(gen);
+/* ── CONTROLS ── */
+function ctrlMsg(msg, color) {
+  var el = document.getElementById('ctrl-msg');
+  el.textContent = msg;
+  el.style.color = color || '#64748b';
 }
 
-/* Build the task rows HTML only — no card wrapper, embeds inside the gen card */
-function renderTaskRows(gen,progress,evoEntry,activeTid){
-  var taskList=[],resultsMap={};
-  if(progress&&progress.task_list&&progress.task_list.length){
-    taskList=progress.task_list;
-    Object.keys(progress.results||{}).forEach(function(tid){
-      resultsMap[tid]=progress.results[tid];
-    });
-  } else if(evoEntry&&evoEntry.task_results&&evoEntry.task_results.length){
-    taskList=evoEntry.task_results.map(function(r){return r.task_id;});
-    evoEntry.task_results.forEach(function(r){resultsMap[r.task_id]=r;});
-  }
-  if(!taskList.length) return '';
-
-  var descs=(progress&&progress.descriptions)||{};
-  var passCount=0,failCount=0,pending=0;
-  var rows=taskList.map(function(tid){
-    var r=resultsMap[tid];
-    var isActive=tid===activeTid;
-    var icon,cls;
-    if(isActive){
-      icon='<div class="spinner spinner-cyan" style="width:11px;height:11px"></div>';
-      cls='t-run';
-    } else if(r){
-      var pass=(r.status==='pass'||r.success===true);
-      if(pass){icon='<span style="color:var(--lime)">✓</span>';cls='t-pass';passCount++;}
-      else{icon='<span style="color:var(--red)">✗</span>';cls='t-fail';failCount++;}
-    } else {
-      icon='<span style="opacity:.3">·</span>';cls='t-pend';pending++;
-    }
-    var label=descs[tid]||tid;
-    var errHtml=r&&!isActive&&r.error_type?'<div class="task-err">'+r.error_type+'</div>':'';
-    var rtHtml=r&&r.runtime?'<div class="task-rt">'+r.runtime+'s</div>':'';
-    var clickHtml='';
-    if(r&&cls==='t-fail'){
-      var safeRow=JSON.stringify({
-        task_id:tid,status:'fail',
-        error_type:r.error_type||'',
-        agents_used:r.agents_used||[],
-        cycles:r.cycles||{}
-      }).replace(/"/g,'&quot;');
-      clickHtml=' onclick="openDrawer('+safeRow+','+gen+')" style="cursor:pointer"';
-    }
-    return '<div class="task-row '+cls+'"'+clickHtml+' title="'+tid+'">'+
-      '<div class="task-icon">'+icon+'</div>'+
-      '<div class="task-id">'+label+'</div>'+
-      errHtml+rtHtml+
-    '</div>';
-  }).join('');
-
-  var isCollapsed=STATE.collapsed.has(gen);
-  var summary='<span style="color:var(--lime)">'+passCount+' ✓</span> '+
-    '<span style="color:var(--red)">'+failCount+' ✗</span>'+
-    (pending?' <span style="color:var(--dim)">'+pending+' pending</span>':'');
-
-  return '<div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">'+
-    '<div class="collapse-hdr" onclick="toggleCollapse('+gen+',event)" style="margin-bottom:0">'+
-      '<div style="font-size:.62rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em">'+
-        'Benchmark Tasks &nbsp;<span style="font-weight:400">'+summary+'</span>'+
-      '</div>'+
-      '<button class="collapse-btn">'+
-        (isCollapsed?'▶ Show '+taskList.length:'▼ Collapse')+
-      '</button>'+
-    '</div>'+
-    (isCollapsed?'':'<div class="task-list" style="margin-top:8px;max-height:320px;overflow-y:auto">'+rows+'</div>')+
-  '</div>';
+async function applyModel() {
+  var v = document.getElementById('model-select').value;
+  if (!v) { ctrlMsg('Select a model first.', '#f87171'); return; }
+  var btn = document.getElementById('btn-apply');
+  btn.disabled = true;
+  ctrlMsg('Saving…', '#fbbf24');
+  try {
+    var r = await fetch('/api/config', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'set_model', model:v})});
+    var d = await r.json();
+    ctrlMsg(d.ok ? '✓ Model saved — takes effect on next Start Fresh' : 'Error: ' + d.error, d.ok ? '#4ade80' : '#f87171');
+  } catch(e) { ctrlMsg('Request failed: ' + e.message, '#f87171'); }
+  btn.disabled = false;
 }
 
-/* Kept for any callers that pass evoEntry — delegates to renderTaskRows */
-function renderTaskList(gen,progress,evoEntry,activeTid){
-  return renderTaskRows(gen,progress,evoEntry,activeTid);
+async function stopEvolution() {
+  if (!confirm('Stop the evolution?\n\nThe current task will finish, then the agent halts. Use Start Fresh to resume.')) return;
+  var btn = document.getElementById('btn-stop');
+  btn.disabled = true;
+  ctrlMsg('Stopping…', '#f87171');
+  try {
+    var r = await fetch('/api/config', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'stop'})});
+    var d = await r.json();
+    ctrlMsg(d.ok ? '⏹ Stopped. Click Start Fresh to resume.' : 'Error: ' + d.error,
+            d.ok ? '#f87171' : '#f87171');
+    setTimeout(function(){ btn.disabled = false; }, 3000);
+  } catch(e) { ctrlMsg('Request failed: ' + e.message, '#f87171'); btn.disabled = false; }
 }
 
-/* ══ PHASE HELPERS ══ */
-var PHASE_LABELS={
-  'thinking':                  '🧠 Thinking — Analyst decomposing the problem…',
-  'writing_unit_tests':        '🧪 Writing tests — TestWriter generating test cases…',
-  'writing_code':              '💻 Writing code — Coder generating solution…',
-  'reviewing':                 '🔍 Reviewing — Critic checking code quality…',
-  'revising':                  '✏️ Revising — Reviser improving code…',
-  'compiling':                 '⚙️ Compiling — Running code in sandbox…',
-  'running_unit_tests':        '▶ Running unit tests — Checking test cases…',
-  'debugging':                 '🔧 Debugging — Debugger patching errors…',
-  'running_integration_tests': '🔗 Integration tests — Re-running after debug…'
-};
-function phaseLabel(phase){
-  return PHASE_LABELS[phase]||('⚙️ '+phase.replace(/_/g,' ')+'…');
-}
-function renderPhaseBadges(pr){
-  var defs=[
-    {k:'compile',           l:'Compile'},
-    {k:'unit_tests',        l:'Unit Tests'},
-    {k:'integration_tests', l:'Integ. Tests'}
-  ];
-  return defs.map(function(d){
-    var v=pr[d.k];
-    if(v===undefined||v===null) return '<span class="prb prb-pend">⬜ '+d.l+'</span>';
-    return v?'<span class="prb prb-pass">✓ '+d.l+'</span>'
-            :'<span class="prb prb-fail">✗ '+d.l+'</span>';
-  }).join('');
+async function restartEvolution() {
+  var btn = document.getElementById('btn-restart');
+  btn.disabled = true;
+  ctrlMsg('Restarting…', '#fbbf24');
+  try {
+    var r = await fetch('/api/config', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'restart'})});
+    var d = await r.json();
+    ctrlMsg(d.ok ? '✓ Restarting from Gen 1…' : 'Error: ' + d.error,
+            d.ok ? '#a78bfa' : '#f87171');
+    setTimeout(function(){ btn.disabled = false; }, 8000);
+  } catch(e) { ctrlMsg('Request failed: ' + e.message, '#f87171'); btn.disabled = false; }
 }
 
-/* ══ TOKEN BUDGET CARD ══ */
-function fmtNum(n){
-  if(n===null||n===undefined)return '0';
-  return Math.round(n).toLocaleString();
-}
-function fmtTime(iso){
-  if(!iso)return '';
-  try{return new Date(iso).toLocaleTimeString();}catch(e){return iso.slice(11,19)||'';}
-}
-
-function renderTokenBudget(){
-  var tu=STATE.tokenUsage;
-  var ms=STATE.modelStatus||{};
-  var card=document.getElementById('token-budget-card');
-  if(!tu||!tu.model){card.style.display='none';return;}
-  card.style.display='block';
-
-  // ── Determine true exhaustion state from model_status.json ──────────────
-  // token_usage.json only counts THIS session (resets on restart).
-  // model_status.json shows what Groq actually told us during fallback switching.
-  var activeModel=ms.active||tu.model||'';
-  var tpdExhausted=ms.tpd_exhausted||[];
-  var unavailable=ms.unavailable||[];
-  var primaryModel='meta-llama/llama-4-scout-17b-16e-instruct';
-  var primaryExhausted=tpdExhausted.indexOf(primaryModel)>=0;
-  var onFallback=(activeModel!==primaryModel&&activeModel!=='');
-  var allExhausted=(tpdExhausted.length+unavailable.length)>=6;
-
-  // What to show for the budget bar:
-  // If Groq reported primary TPD exhausted, show bar as ~99% (honest signal)
-  // otherwise show what the local counter says
-  var localPct=tu.pct_used||0;
-  var displayPct, displayUsed, displayRemaining, budgetNote='';
-
-  if(primaryExhausted){
-    // Groq rolling-window is near-full even though our session only used a few tokens
-    displayPct=0.99;
-    displayUsed='~500k (rolling 24h window)';
-    displayRemaining='Refills gradually over 24h';
-    budgetNote='<div style="margin-top:8px;padding:8px 12px;background:rgba(255,49,49,.08);'+
-      'border:1px solid rgba(255,49,49,.3);border-radius:8px;font-size:.68rem;color:#ff9999;line-height:1.5">'+
-      '⚠️ <strong>Groq\'s rolling 24-hour window is exhausted</strong> from earlier runs today.<br>'+
-      'The '+fmtNum(tu.total_tokens_used)+' shown above is only what <em>this session</em> used — '+
-      'it resets each restart. Groq\'s server-side counter still holds ~500k tokens.<br>'+
-      '<strong>Tokens free up gradually as the 24h window rolls. Full reset in ~'+_hoursUntilReset()+'.</strong>'+
-      '</div>';
-  } else {
-    displayPct=localPct;
-    displayUsed=fmtNum(tu.total_tokens_used)+' used this session';
-    displayRemaining=fmtNum(tu.tokens_remaining)+' remaining';
-  }
-
-  var pctStr=(displayPct*100).toFixed(1);
-  var barColor=displayPct<0.6?'var(--lime)':displayPct<0.85?'var(--amber)':'var(--red)';
-  var pctColor=barColor;
-
-  // ── Active model display ─────────────────────────────────────────────────
-  var modelFull=activeModel||tu.model||'unknown';
-  var modelShort=modelFull.includes('/')?modelFull.split('/').pop():modelFull;
-  var fallbackNote='';
-  if(onFallback){
-    var fb=_GROQ_MODELS.find(function(x){return x.id===activeModel;})||{name:modelFull};
-    fallbackNote='<span style="font-size:.6rem;color:var(--amber);border:1px solid rgba(255,179,0,.3);'+
-      'padding:1px 6px;border-radius:4px;margin-left:6px">FALLBACK</span>';
-  }
-
-  // Per-agent rows
-  var agents=Object.entries(tu.per_agent||{})
-    .sort(function(a,b){return b[1].tokens-a[1].tokens;});
-  var maxTok=agents.length?Math.max.apply(null,agents.map(function(e){return e[1].tokens;})):1;
-  var agentHtml='';
-  if(agents.length){
-    agentHtml='<div class="tb-divider"></div>'+
-      '<div class="tb-agents-label">Per-Agent Usage (this session)</div>';
-    agents.forEach(function(entry){
-      var name=entry[0], info=entry[1];
-      var barW=maxTok?Math.round(info.tokens/maxTok*100):0;
-      agentHtml+=
-        '<div class="tb-agent-row">'+
-          '<div class="tb-agent-name">'+name+'</div>'+
-          '<div class="tb-agent-tokens">'+fmtNum(info.tokens)+'</div>'+
-          '<div class="tb-agent-bar-wrap"><div class="tb-agent-bar" style="width:'+barW+'%"></div></div>'+
-          '<div class="tb-agent-calls">'+info.calls+' call'+(info.calls!==1?'s':'')+'</div>'+
-        '</div>';
-    });
-  } else {
-    agentHtml='<div class="tb-divider"></div>'+
-      '<div class="tb-empty">No API calls yet this session.</div>';
-  }
-
-  var html=
-    '<div class="tb-header">'+
-      '<div>'+
-        '<div class="tb-model-name" title="'+modelFull+'">'+modelShort+fallbackNote+'</div>'+
-        '<div class="tb-chips">'+
-          '<span class="tb-chip tb-chip-groq">GROQ</span>'+
-          '<span class="tb-chip tb-chip-stat">'+fmtNum(tu.tpm_limit)+' TPM</span>'+
-          '<span class="tb-chip tb-chip-stat">'+fmtNum(tu.daily_limit_tokens)+' TPD</span>'+
-          '<span class="tb-chip tb-chip-stat" style="color:var(--dim);font-size:.5rem" title="'+modelFull+'">'+modelFull+'</span>'+
-        '</div>'+
-      '</div>'+
-    '</div>'+
-
-    '<div class="tb-budget-wrap">'+
-      '<div class="tb-budget-header">'+
-        '<span class="tb-budget-label">Daily Token Budget (Groq rolling 24h)</span>'+
-        '<span class="tb-budget-pct" style="color:'+pctColor+'">'+pctStr+'% used</span>'+
-      '</div>'+
-      '<div class="tb-bar-track">'+
-        '<div class="tb-bar-fill" style="width:'+pctStr+'%;background:'+barColor+'"></div>'+
-      '</div>'+
-      '<div class="tb-bar-meta">'+
-        '<span class="tb-bar-used">'+displayUsed+'</span>'+
-        '<span class="tb-bar-left" style="color:'+(primaryExhausted?'var(--amber)':'var(--lime)')+'">'+displayRemaining+'</span>'+
-      '</div>'+
-    '</div>'+
-    budgetNote+
-    agentHtml+
-    '<div class="tb-timestamp">Last updated: '+fmtTime(tu.last_updated)+'</div>';
-
-  document.getElementById('token-budget-content').innerHTML=html;
-}
-
-function _hoursUntilReset(){
-  // Groq rolling 24h window — tokens used at time T expire at T+24h.
-  // We don't know exactly when past tokens were used, so we estimate
-  // "full reset" as midnight UTC (conservative but useful).
-  var now=new Date();
-  var utcH=now.getUTCHours(), utcM=now.getUTCMinutes();
-  var minsLeft=(24*60)-(utcH*60+utcM);
-  var h=Math.floor(minsLeft/60), m=minsLeft%60;
-  return h+'h '+m+'m';
-}
-
-/* ══ SIDEBAR NAV ══ */
-/* ══ EVOLUTION IMPROVEMENTS ══ */
-function renderImprovements(){
-  var card=document.getElementById('evo-improvements-card');
-  var container=document.getElementById('evo-improvements');
-  var log=STATE.evolutionLog||[];
-
-  if(!log.length){
-    card.style.display='none';
-    return;
-  }
-  card.style.display='';
-
-  var html='<div class="evo-imp-section">';
-  log.forEach(function(e){
-    var delta=e.improvement_delta;
-    var improved=typeof delta==='number'&&delta>0;
-    var regressed=typeof delta==='number'&&delta<0;
-    var pending=delta===null||delta===undefined;
-
-    var cardClass=improved?'improved':regressed?'regressed':'pending';
-
-    // Delta chip
-    var chipClass=improved?'improved':regressed?'regressed':'pending';
-    var chipLabel=pending
-      ?'⏳ Gen '+e.to_gen+' pending'
-      :improved
-        ?'▲ +'+pct(Math.abs(delta))+' Gen '+e.to_gen
-        :'▼ −'+pct(Math.abs(delta))+' Gen '+e.to_gen;
-
-    // Error type tags
-    var errTags='';
-    var bd=e.failure_breakdown||{};
-    Object.entries(bd).sort(function(a,b){return b[1]-a[1];}).forEach(function(kv){
-      errTags+='<span class="evo-imp-tag-err">'+kv[0]+' ×'+kv[1]+'</span>';
-    });
-
-    // Topology change tags
-    var topoTags='';
-    (e.topology_changes||[]).forEach(function(c){
-      topoTags+='<span class="evo-imp-tag-topo">'+c+'</span>';
-    });
-
-    var allTags=errTags+topoTags;
-
-    // Pass rate display
-    var rateStr=pct(e.pass_rate_actual||0)+' pass rate ('+
-      (e.passed||0)+'/'+( e.total||0)+' tasks)';
-
-    // Improvement log — full text, not clamped
-    var logText=(e.improvement_log||'—').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-    html+=
-      '<div class="evo-imp-card '+cardClass+'">'+
-        '<div class="evo-imp-header">'+
-          '<div class="evo-imp-gen">Gen '+e.from_gen+' <span>→</span> Gen '+e.to_gen+'</div>'+
-          '<div class="evo-imp-delta-chip '+chipClass+'">'+chipLabel+'</div>'+
-        '</div>'+
-        '<div class="evo-imp-meta">'+
-          '<span class="evo-imp-rate">Gen '+e.from_gen+': <strong>'+rateStr+'</strong></span>'+
-          (e.timestamp?'<span class="evo-imp-rate">'+e.timestamp.slice(0,16).replace('T',' ')+'</span>':'')+
-        '</div>'+
-        (allTags?'<div class="evo-imp-tags">'+allTags+'</div>':'')+
-        '<div class="evo-imp-divider"></div>'+
-        '<div class="evo-imp-log-label">🤖 What the LLM decided to improve</div>'+
-        '<div class="evo-imp-log-text">'+logText+'</div>'+
-      '</div>';
-  });
-  html+='</div>';
-  container.innerHTML=html;
-}
-
-function renderSidebarNav(){
-  var gens=getKnownGens(),hb=STATE.heartbeat;
-  document.getElementById('gen-nav').innerHTML=gens.map(function(g){
-    var live=hb&&hb.active_gen===g&&hb.status==='RUNNING';
-    var e=getEvoEntry(g);
-    var pr=e?pct(e.pass_rate_actual):(live?'Running…':'—');
-    var barW=e?(e.pass_rate_actual*100).toFixed(1)+'%':(live&&hb?pct2str(hb.pass_rate_so_far):'0%');
-    var activeTid=(live&&hb)?hb.active_task_id:'';
-
-    // Build sidebar task list
-    var progress=STATE.genProgress[g]||null;
-    var taskListHtml='';
-    var taskList=[],resultsMap={};
-    if(progress&&progress.task_list&&progress.task_list.length){
-      taskList=progress.task_list;
-      Object.keys(progress.results||{}).forEach(function(tid){resultsMap[tid]=progress.results[tid];});
-    } else if(e&&e.task_results&&e.task_results.length){
-      taskList=e.task_results.map(function(r){return r.task_id;});
-      e.task_results.forEach(function(r){resultsMap[r.task_id]=r;});
-    }
-    if(taskList.length){
-      var descs=(progress&&progress.descriptions)||{};
-      var rows=taskList.map(function(tid){
-        var r=resultsMap[tid];
-        var isActive=tid===activeTid;
-        var icon,cls;
-        if(isActive){
-          icon='<div class="spinner spinner-cyan" style="width:9px;height:9px"></div>';cls='t-run';
-        } else if(r){
-          var pass=(r.status==='pass'||r.success===true);
-          if(pass){icon='<span style="color:var(--lime);font-size:.65rem">✓</span>';cls='t-pass';}
-          else{icon='<span style="color:var(--red);font-size:.65rem">✗</span>';cls='t-fail';}
-        } else {
-          icon='<span style="opacity:.3">·</span>';cls='t-pend';
-        }
-        var label=descs[tid]||tid;
-        var errHtml=(r&&cls==='t-fail'&&r.error_type)?'<span class="sb-task-err">'+r.error_type+'</span>':'';
-        var clickHtml='';
-        if(r&&cls==='t-fail'){
-          var safeRow=JSON.stringify({task_id:tid,status:'fail',error_type:r.error_type||'',agents_used:r.agents_used||[],cycles:r.cycles||{}}).replace(/"/g,'&quot;');
-          clickHtml=' onclick="openDrawer('+safeRow+','+g+')"';
-        }
-        return '<div class="sb-task-row '+cls+'"'+clickHtml+' title="'+tid+'">'+
-          '<div class="sb-task-icon">'+icon+'</div>'+
-          '<div class="sb-task-id">'+label+'</div>'+
-          errHtml+
-        '</div>';
-      }).join('');
-      taskListHtml='<div class="sb-task-list">'+rows+'</div>';
-    }
-
-    return '<div class="gen-btn'+(STATE.activeGen===g?' active':'')+'" style="cursor:default">'+
-      '<div class="gen-btn-header" style="cursor:pointer" onclick="selectGen('+g+')">'+
-        (live?'<div class="spinner spinner-sm"></div>':'<span style="font-size:.8rem">'+(e?'✅':'⬜')+'</span>')+
-        '<div class="gen-btn-title">Generation '+g+'</div>'+
-      '</div>'+
-      '<div class="gen-btn-sub" style="cursor:pointer" onclick="selectGen('+g+')">Pass rate: '+pr+'</div>'+
-      '<div class="gen-btn-bar" style="cursor:pointer" onclick="selectGen('+g+')"><div class="gen-btn-bar-fill" style="width:'+barW+'"></div></div>'+
-      taskListHtml+
-      '</div>';
-  }).join('');
-}
-
-/* ══ TIMELINE ══ */
-function renderTimeline(){
-  var gens=getKnownGens(),hb=STATE.heartbeat;
-  var parts=[];
-  gens.forEach(function(g,i){
-    var e=getEvoEntry(g);
-    var live=hb&&hb.active_gen===g&&(hb.status==='RUNNING'||hb.status==='ANALYSING');
-    var pr=e?pct(e.pass_rate_actual):(live?'…':'?');
-    var cls=live?'live':(STATE.activeGen===g?'active':'');
-    // mini progress ring offset for timeline circle
-    var prog=live&&hb?(hb.progress||'0/0').split('/').map(Number):null;
-    var progStr=prog&&prog[1]?prog[0]+'/'+prog[1]:'';
-    parts.push(
-      '<div class="tl-node" onclick="selectGen('+g+')">'+
-      '<div class="tl-circle '+cls+'" style="'+(live?'border-color:var(--lime)':'')+'">' +
-        (live
-          ? '<div class="spinner" style="width:22px;height:22px"></div>'
-          : '<span>G'+g+'</span>'
-        )+
-        (progStr?'<span style="font-size:.42rem;color:var(--lime)">'+progStr+'</span>':'')+
-      '</div>'+
-      '<div class="tl-label">'+(live?'<span style="color:var(--lime)">G'+g+' live</span>':pr)+'</div>'+
-      '</div>'
-    );
-    if(i<gens.length-1)parts.push('<div class="tl-line'+(e?' done':'')+'"></div>');
-  });
-  if(hb&&hb.status==='SPAWNING')
-    parts.push('<div class="tl-line"></div><div class="tl-node"><div class="tl-circle" style="border-style:dashed;font-size:.56rem">G'+(hb.active_gen+1)+'<br><span style="font-size:.42rem;color:var(--amber)">spawning</span></div><div class="tl-label">—</div></div>');
-  document.getElementById('timeline').innerHTML=parts.join('');
-}
-
-/* ══ GEN DETAIL ══ */
-function renderGenDetail(gen){
-  var e=getEvoEntry(gen),hb=STATE.heartbeat,matrix=STATE.benchmarkMatrix;
-  var progress=STATE.genProgress[gen]||null;
-  var live=hb&&hb.active_gen===gen&&(hb.status==='RUNNING'||hb.status==='ANALYSING'||hb.status==='SPAWNING');
-  var activeTid=(hb&&hb.active_gen===gen&&hb.status==='RUNNING')?hb.active_task_id:'';
-  var html='';
-
-  if(e){
-    // Generation completed — show final overview with task list
-    var passed=e.passed||0,total=e.total||0,failed=total-passed;
-    var delta=e.improvement_delta;
-    var dHtml=delta===null||delta===undefined
-      ?'<span class="delta-pend">Awaiting next gen…</span>'
-      :delta>=0?'<span class="delta-pos">▲ '+pct(delta)+' vs parent</span>'
-              :'<span class="delta-neg">▼ '+pct(Math.abs(delta))+' vs parent</span>';
-    html+='<div class="card"><div class="card-title">Generation '+gen+'</div>'+
-      '<div class="stat-grid">'+
-      '<div class="stat"><div class="stat-val">'+pct(e.pass_rate_actual)+'</div><div class="stat-label">Pass Rate</div></div>'+
-      '<div class="stat"><div class="stat-val" style="color:var(--lime)">'+passed+'</div><div class="stat-label">Passed</div></div>'+
-      '<div class="stat"><div class="stat-val" style="color:var(--red)">'+failed+'</div><div class="stat-label">Failed</div></div>'+
-      '<div class="stat"><div class="stat-val" style="font-size:.9rem;padding-top:8px">'+dHtml+'</div><div class="stat-label">vs Parent</div></div>'+
-      '</div>'+
-      '</div>';
-  } else if(live){
-    // Generation running — show live stats + task list
-    var parts2=(hb.progress||'0/0').split('/').map(Number);
-    var d2=parts2[0]||0,t2=parts2[1]||0;
-    var barW2=t2?pct2str(d2/t2):'0%';
-    html+='<div class="card"><div class="card-title">Generation '+gen+
-      ' <span style="font-size:.6rem;color:var(--lime);font-weight:400">● '+hb.status+'</span></div>'+
-      '<div class="stat-grid" style="margin-bottom:16px">'+
-      '<div class="stat"><div class="stat-val">'+pct(hb.pass_rate_so_far)+'</div><div class="stat-label">Pass Rate</div></div>'+
-      '<div class="stat"><div class="stat-val" style="color:var(--lime)">'+hb.passed_so_far+'</div><div class="stat-label">Passed</div></div>'+
-      '<div class="stat"><div class="stat-val" style="color:var(--red)">'+hb.failed_so_far+'</div><div class="stat-label">Failed</div></div>'+
-      '<div class="stat"><div class="stat-val" style="font-size:.95rem;color:var(--amber)">'+hb.progress+'</div><div class="stat-label">Progress</div></div>'+
-      '</div>'+
-      '<div class="big-bar-track" style="margin-bottom:4px"><div class="big-bar-fill" style="width:'+barW2+'"></div></div>'+
-      (hb.current_phase?'<div style="font-size:.6rem;color:var(--cyan);margin-top:6px">'+phaseLabel(hb.current_phase)+'</div>':'')+
-      '</div>';
-  }
-
-  if(e&&e.failure_breakdown&&Object.keys(e.failure_breakdown).length){
-    var bd=e.failure_breakdown,maxV=Math.max.apply(null,Object.values(bd));
-    var bars=Object.entries(bd).sort(function(a,b){return b[1]-a[1];}).map(function(kv,i){
-      var p2=maxV?Math.round(kv[1]/maxV*100):0;
-      return '<div class="bd-row"><div class="bd-label">'+kv[0]+'</div>'+
-        '<div class="bd-track"><div class="bd-fill" style="width:'+p2+'%;background:'+COLORS[i%COLORS.length]+'"></div></div>'+
-        '<div class="bd-count">'+kv[1]+'</div></div>';
-    }).join('');
-    html+='<div class="card"><div class="card-title">Failure Breakdown by Error Type</div><div class="breakdown">'+bars+'</div></div>';
-  }
-
-  if(e&&e.agent_failure_counts&&Object.keys(e.agent_failure_counts).length){
-    var items=Object.entries(e.agent_failure_counts).sort(function(a,b){return b[1]-a[1];})
-      .map(function(kv){return '<div class="attr-item"><div class="attr-count">'+kv[1]+'</div><div class="attr-name">'+kv[0]+'</div></div>';}).join('');
-    html+='<div class="card"><div class="card-title">Agent Failure Attribution</div><div class="attr-grid">'+items+'</div></div>';
-  }
-
-  if(matrix&&matrix.matrix&&matrix.gens&&matrix.gens.length>1)html+=renderMatrix(matrix,gen);
-
-  if(e){
-    html+='<div class="card"><div class="card-title">Evolution Entry: Gen '+e.from_gen+' → '+e.to_gen+'</div>'+renderEvoEntry(e)+'</div>';
-  }
-
-  document.getElementById('gen-detail').innerHTML=html;
-}
-
-function renderRows(rows,filter,gen){
-  var out=rows.filter(function(r){return filter==='all'||r.status===filter;})
-    .map(function(r){
-      var pass=r.status==='pass';
-      var agents=(r.agents_used||[]).join(' → ')||'—';
-      var safe=JSON.stringify(r).replace(/"/g,'&quot;');
-      return '<tr onclick="openDrawer('+safe+','+gen+')">'+
-        '<td>'+r.task_id+'</td>'+
-        '<td><span class="pill '+(pass?'pass-pill':'fail-pill')+'">'+(pass?'PASS':'FAIL')+'</span></td>'+
-        '<td style="color:'+(pass?'var(--dim)':'var(--red)')+'">'+( r.error_type||'—')+'</td>'+
-        '<td style="color:var(--dim);font-size:.6rem">'+agents+'</td></tr>';
-    }).join('');
-  return out||'<tr><td colspan="4" style="color:var(--dim);text-align:center;padding:18px">No results yet</td></tr>';
-}
-
-function filterTable(btn,filter,gen){
-  btn.closest('.filter-bar').querySelectorAll('.filter-btn').forEach(function(b){b.classList.remove('active');});
-  btn.classList.add('active');
-  var e=getEvoEntry(gen);
-  if(e)document.getElementById('results-body-'+gen).innerHTML=renderRows(e.task_results,filter,gen);
-}
-
-function renderMatrix(matrix,activeGen){
-  var gens=matrix.gens,tasks=matrix.tasks||Object.keys(matrix.matrix);
-  var thead='<tr><th>Task</th>'+gens.map(function(g){return '<th>Gen '+g+'</th>';}).join('')+'</tr>';
-  var tbody=tasks.map(function(tid){
-    var row=matrix.matrix[tid]||{};
-    var cells=gens.map(function(g,gi){
-      var cell=row[g];if(!cell)return '<td class="m-none">—</td>';
-      var prev=gi>0?row[gens[gi-1]]:null;
-      var newPass=cell.status==='pass'&&prev&&prev.status==='fail';
-      var reg=cell.status==='fail'&&prev&&prev.status==='pass';
-      var cls=newPass?'m-new':reg?'m-reg':cell.status==='pass'?'m-pass':'m-fail';
-      var lbl=newPass?'✅ new':reg?'⚠️':cell.status==='pass'?'✅':'❌';
-      return '<td class="'+cls+'" title="'+(cell.error||'')+'">'+lbl+'</td>';
-    }).join('');
-    return '<tr><td style="font-size:.6rem;font-family:var(--mono);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+tid+'</td>'+cells+'</tr>';
-  }).join('');
-  return '<div class="card"><div class="card-title">Cross-Generation Task Matrix</div>'+
-    '<div style="font-size:.58rem;color:var(--dim);margin-bottom:10px">'+
-    '<span style="color:var(--cyan)">✅ new</span> = first pass this gen &nbsp; <span style="color:var(--amber)">⚠️</span> = regression</div>'+
-    '<div class="matrix-wrap"><table class="matrix-table"><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table></div></div>';
-}
-
-function renderEvoEntry(e){
-  var delta=e.improvement_delta;
-  var dStr=delta===null||delta===undefined
-    ?'<span class="delta-pend">Pending next gen</span>'
-    :delta>=0?'<span class="delta-pos">▲ '+pct(delta)+' improvement</span>'
-            :'<span class="delta-neg">▼ '+pct(Math.abs(delta))+' regression</span>';
-  var changes=(e.topology_changes||[]).map(function(c){return '<span class="change-tag">'+c+'</span>';}).join('');
-  var orig=e.originality||{};
-  var origBadge='';
-  if(orig.verdict){
-    var bClass=orig.verdict==='ORIGINAL'?'pass-pill':orig.verdict==='NEAR_CLONE'?'delta-pend':'fail-pill';
-    var scoreStr=typeof orig.originality_score==='number'?(' '+Math.round(orig.originality_score*100)+'% original'):'';
-    origBadge='<span class="pill '+bClass+'">🔬 '+orig.verdict+scoreStr+'</span> ';
-  }
-  return '<div class="evo-header"><div class="evo-title">Gen '+e.from_gen+' → '+e.to_gen+'</div><div>'+dStr+'</div></div>'+
-    '<div class="evo-meta">'+origBadge+(e.timestamp||'').slice(0,19).replace('T',' ')+' · '+pct(e.pass_rate_actual)+' pass rate</div>'+
-    (changes?'<div class="evo-changes">'+changes+'</div>':'')+
-    '<div class="evo-log">'+(e.improvement_log||'—')+'</div>';
-}
-
-function openDrawer(row,gen){
-  var pass=row.status==='pass';
-  var dc=document.getElementById('drawer-content');
-
-  // Base info immediately
-  dc.innerHTML=
-    '<div style="font-size:1rem;font-weight:800;margin-bottom:4px">'+row.task_id+'</div>'+
-    '<div style="font-size:.67rem;color:var(--dim);margin-bottom:20px">Generation '+gen+
-    ' · <span class="pill '+(pass?'pass-pill':'fail-pill')+'">'+(pass?'PASS':'FAIL')+'</span>'+
-    ' · <a href="/code" target="_blank" style="color:var(--cyan);font-size:.6rem;text-decoration:none">Browse all gen files ↗</a></div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px">'+
-      '<div><div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Agents Used</div>'+
-        '<div style="font-size:.68rem" data-field="agents_used">'+((row.agents_used||[]).join(' → ')||'Loading…')+'</div></div>'+
-      '<div><div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Error Type</div>'+
-        '<div style="font-size:.68rem;color:'+(pass?'var(--lime)':'var(--red)')+'">'+( row.error_type||'None')+'</div></div>'+
-      '<div><div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Cycles</div>'+
-        '<div style="font-size:.68rem" data-field="cycles">'+Object.entries(row.cycles||{}).map(function(kv){return kv[0]+': '+kv[1];}).join(', ')+'</div></div>'+
-    '</div>'+
-    '<div id="code-loading" style="color:var(--dim);font-size:.65rem;padding:12px 0">⟳ Loading details…</div>';
-
-  document.getElementById('drawer').classList.add('open');
-  document.getElementById('overlay').classList.add('show');
-
-  // Fetch the full result JSON to get final_code
-  var url='generations/gen_'+gen+'/results/'+row.task_id+'_result.json';
-  fetch(url+'?_='+Date.now())
-    .then(function(r){return r.ok?r.json():null;})
-    .then(function(data){
-      var codeEl=document.getElementById('code-loading');
-      if(!codeEl)return;
-      if(!data){
-        codeEl.innerHTML=
-          '<div style="background:#1a0000;border:1px solid rgba(255,49,49,.3);border-radius:8px;padding:14px">'+
-            '<div style="font-size:.55rem;color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">❌ Result file not found</div>'+
-            '<div style="font-size:.65rem;color:#fc8181">Error type recorded: <strong>'+row.error_type+'</strong></div>'+
-            '<div style="font-size:.58rem;color:var(--dim);margin-top:8px">The detailed traceback is written to the generation log.<br>'+
-            'Check: <code style="color:var(--cyan)">generations/gen_'+gen+'/generation.log</code> for full output.</div>'+
-          '</div>';
-        return;
-      }
-
-      // Update agents used + cycles from full result (not passed in row)
-      if(data.agents_used&&data.agents_used.length){
-        var auEl=dc.querySelector('[data-field="agents_used"]');
-        if(auEl)auEl.textContent=data.agents_used.join(' → ');
-      }
-      if(data.cycles&&Object.keys(data.cycles).length){
-        var cyEl=dc.querySelector('[data-field="cycles"]');
-        if(cyEl)cyEl.textContent=Object.entries(data.cycles).map(function(kv){return kv[0]+': '+kv[1];}).join(', ');
-      }
-
-      var html='';
-
-      // ── Stderr / error — always show first for failures ──
-      var stderr=(data.stderr||'').trim();
-      var stdout=(data.stdout||'').trim();
-      if(!pass&&stderr){
-        var errEsc=stderr.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        html+='<div style="margin-bottom:16px">'+
-          '<div style="font-size:.55rem;color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">❌ Error Output</div>'+
-          '<div style="background:#1a0000;border:1px solid rgba(255,49,49,.3);border-radius:8px;padding:12px;max-height:280px;overflow-y:auto">'+
-            '<pre style="margin:0;color:#fc8181;font-size:.63rem;line-height:1.6;white-space:pre-wrap;word-break:break-all">'+errEsc+'</pre>'+
-          '</div></div>';
-      }
-
-      // ── Stdout (if any) ──
-      if(stdout){
-        var outEsc=stdout.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        html+='<div style="margin-bottom:16px">'+
-          '<div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Stdout</div>'+
-          '<div style="background:#0a0a0f;border:1px solid var(--border);border-radius:8px;padding:10px;max-height:160px;overflow-y:auto">'+
-            '<pre style="margin:0;color:var(--dim);font-size:.6rem;white-space:pre-wrap">'+outEsc+'</pre>'+
-          '</div></div>';
-      }
-
-      // ── Generated code ──
-      if(data.final_code){
-        var escaped=data.final_code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        html+='<div style="margin-bottom:16px">'+
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
-            '<span style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px">Generated Code</span>'+
-            '<button onclick="copyCode(this)" data-code="'+data.final_code.replace(/"/g,'&quot;')+'" '+
-              'style="background:rgba(0,243,255,.1);border:1px solid rgba(0,243,255,.3);color:var(--cyan);'+
-              'border-radius:6px;padding:3px 10px;font-size:.55rem;cursor:pointer;font-family:var(--font)">Copy</button>'+
-          '</div>'+
-          '<div style="background:#0a0a0f;border:1px solid var(--border);border-radius:8px;padding:12px;max-height:400px;overflow-y:auto">'+
-            '<pre style="margin:0;font-size:.63rem;line-height:1.6;white-space:pre"><code>'+escaped+'</code></pre>'+
-          '</div></div>';
-      } else {
-        html+='<div style="color:var(--dim);font-size:.65rem;margin-bottom:12px">No generated code recorded for this task.</div>';
-      }
-
-      // ── Test results table ──
-      if(data.test_results&&data.test_results.length){
-        var trows=data.test_results.map(function(tr){
-          var ok=tr.passed;
-          return '<tr>'+
-            '<td style="color:var(--dim);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+JSON.stringify(tr.input).slice(0,60)+'</td>'+
-            '<td style="color:var(--dim)">'+JSON.stringify(tr.expected).slice(0,60)+'</td>'+
-            '<td style="color:'+(ok?'var(--lime)':'var(--red)')+'">'+
-              (tr.error?'⚠ '+tr.error.slice(0,40):JSON.stringify(tr.actual||'').slice(0,60))+'</td>'+
-            '<td><span class="pill '+(ok?'pass-pill':'fail-pill')+'">'+(ok?'PASS':'FAIL')+'</span></td>'+
-          '</tr>';
-        }).join('');
-        html+='<div style="margin-bottom:16px">'+
-          '<div style="font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Test Results</div>'+
-          '<table style="font-size:.6rem;width:100%"><thead><tr>'+
-            '<th>Input</th><th>Expected</th><th>Actual</th><th>Status</th>'+
-          '</tr></thead><tbody>'+trows+'</tbody></table></div>';
-      }
-
-      codeEl.innerHTML=html;
-    })
-    .catch(function(){
-      var el=document.getElementById('code-loading');
-      if(el)el.textContent='Could not load code (task result file not found).';
-    });
-}
-function copyCode(btn){
-  navigator.clipboard.writeText(btn.dataset.code).then(function(){
-    btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy';},1500);
-  });
-}
-function closeDrawer(){
-  document.getElementById('drawer').classList.remove('open');
-  document.getElementById('overlay').classList.remove('show');
-}
-
-function pct(v){if(v===null||v===undefined)return '—';return (v*100).toFixed(1)+'%';}
-function pct2str(v){return (v*100).toFixed(1)+'%';}
-function getKnownGens(){
-  var s=new Set();
-  STATE.evolutionLog.forEach(function(e){s.add(e.from_gen);s.add(e.to_gen);});
-  if(STATE.heartbeat)s.add(STATE.heartbeat.active_gen);
-  if(STATE.benchmarkMatrix)(STATE.benchmarkMatrix.gens||[]).forEach(function(g){s.add(Number(g));});
-  if(s.size===0)s.add(1);
-  return Array.from(s).sort(function(a,b){return a-b;});
-}
-function getEvoEntry(gen){return STATE.evolutionLog.find(function(e){return e.from_gen===gen;})||null;}
-function selectGen(gen){STATE.activeGen=gen;renderAll();}
-
+/* ── POLLING ── */
 refresh();
-setInterval(refresh,3000);
+setInterval(refresh, 3000);
 </script>
 </body>
 </html>
