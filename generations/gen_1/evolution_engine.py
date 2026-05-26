@@ -194,7 +194,21 @@ Write a concise improvement plan (plain text, no code, max 300 words) that expla
 ARCHITECTURE CONSTRAINTS (must be preserved):
 - Pipeline uses LangGraph StateGraph (langgraph>=0.2.0); do NOT revert to custom loops
 - LLM client uses ChatGroq (langchain-groq) — llm_client.py is infra, copied automatically
-- Model: meta-llama/llama-4-scout-17b-16e-instruct on Groq (30k TPM / 500k TPD)"""
+- Model: meta-llama/llama-4-scout-17b-16e-instruct on Groq (30k TPM / 500k TPD)
+
+MAS DESIGN PRINCIPLES (apply to every generation — do not remove or weaken):
+1. LOOPS must have TWO exit conditions:
+   a. Objective satisfaction: loop exits when a verifiable goal is met (e.g. tests pass,
+      score improves, error type changes) — NOT when an agent subjectively says "looks good"
+   b. Resource ceiling: a hard count limit prevents infinite loops when goal is unreachable
+2. NO-PROGRESS DETECTION: if a loop iteration produces the same failure type as the
+   previous iteration, exit immediately — the agent is stuck and more cycles waste tokens
+3. PARALLEL BRANCHES (where LangGraph allows): independent sub-tasks should be designed
+   to run concurrently and converge on the best result, not execute sequentially
+4. SKIP UNSOLVABLE TASKS EARLY: before invoking any LLM agent, check whether the task
+   is structurally solvable (has test cases, required packages available, non-empty
+   problem statement) — skip immediately with a clear reason if not
+5. SATISFACTION IS OBJECTIVE: "done" means tests pass, not "an agent says it's done" """
 
         response = self.llm_client.call(prompt)
         return response.strip()[:1500]
@@ -263,6 +277,19 @@ REQUIREMENTS:
   • PipelineState as TypedDict; conditional edges for critic/debug cycles
   • Compile once in __init__; stream with stream_mode="updates" in solve()
 - Every agent file must own its prompt internally
+
+MAS DESIGN PRINCIPLES (non-negotiable — every generation must implement these):
+- Every loop needs TWO exits: (a) objective satisfaction signal — e.g. tests pass,
+  error type changed, score improved — not an agent's subjective opinion; (b) hard
+  count ceiling to prevent infinite loops when the goal is unreachable
+- No-progress detection: if a loop produces the same failure as the previous iteration,
+  exit that loop immediately — repeated identical failures mean the agent is stuck
+- Parallel branches: where sub-tasks are independent (e.g. generating multiple candidate
+  solutions), design them to run concurrently; converge on the first that satisfies the
+  objective condition rather than running sequentially and taking the last result
+- Skip unsolvable tasks before any LLM call: check for missing test cases, unavailable
+  packages, or empty problem statements and return a clear skip result immediately
+- Satisfaction is always objective and verifiable, never an agent's self-assessment
 - requirements.txt already includes: langgraph>=0.2.0, langchain-groq>=0.2.0, langchain-core>=0.3.0
 
 OUTPUT: Write ONLY the complete Python source code for {fname}.
