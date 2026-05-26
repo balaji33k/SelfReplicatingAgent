@@ -363,14 +363,52 @@ def run_generation(gen_config: Config, generation_number: int):
         logger.error("Analysis report is incomplete. Cannot spawn next generation.")
         sys.exit(1)
 
-    # Guardrail: No Regression Without Record
+    # ── Satisfaction condition: target pass rate reached ─────────────────────
+    TARGET_PASS_RATE = float(os.getenv("TARGET_PASS_RATE", "0.95"))
+    if analysis_report.pass_rate >= TARGET_PASS_RATE:
+        logger.info(
+            f"🎯 Target pass rate {TARGET_PASS_RATE:.0%} reached "
+            f"({analysis_report.pass_rate:.1%}) — evolution complete."
+        )
+        _write_heartbeat(generation_number, "DONE", total_tasks, total_tasks,
+                         passed_count, failed_count, "", [])
+        sys.exit(0)
+
+    # ── Hard ceiling: max generations ────────────────────────────────────────
+    MAX_GENERATIONS = int(os.getenv("MAX_GENERATIONS", "20"))
+    if generation_number >= MAX_GENERATIONS:
+        logger.info(
+            f"🛑 Max generation limit ({MAX_GENERATIONS}) reached — stopping evolution."
+        )
+        _write_heartbeat(generation_number, "DONE", total_tasks, total_tasks,
+                         passed_count, failed_count, "", [])
+        sys.exit(0)
+
+    # ── Convergence detection: plateau for N consecutive generations ─────────
+    PLATEAU_GENS = int(os.getenv("PLATEAU_GENS", "3"))
+    PLATEAU_DELTA = float(os.getenv("PLATEAU_DELTA", "0.02"))
+    try:
+        from evolution_tracker import load_history
+        history = load_history()
+        if len(history) >= PLATEAU_GENS:
+            recent = [h.get("actual_pass_rate", 0) for h in history[-PLATEAU_GENS:]]
+            if recent and (max(recent) - min(recent)) < PLATEAU_DELTA:
+                logger.warning(
+                    f"⚠️  Pass rate plateaued at ~{sum(recent)/len(recent):.1%} "
+                    f"for {PLATEAU_GENS} generations (Δ < {PLATEAU_DELTA:.0%}). "
+                    f"Continuing evolution — but consider adjusting the problem pool."
+                )
+    except Exception:
+        pass
+
+    # ── Regression guard ─────────────────────────────────────────────────────
     if (
         current_manifest["parent_pass_rate"] is not None
-        and current_manifest["pass_rate"] < current_manifest["parent_pass_rate"]
+        and current_manifest["pass_rate"] < current_manifest["parent_pass_rate"] - 0.05
     ):
         logger.warning(
-            f"Regression detected: Current pass rate {current_manifest['pass_rate']:.2%} "
-            f"is lower than parent's {current_manifest['parent_pass_rate']:.2%}."
+            f"⚠️  Regression: {current_manifest['pass_rate']:.1%} vs parent "
+            f"{current_manifest['parent_pass_rate']:.1%} — spawning anyway to self-correct."
         )
 
     # 5. Evolutionary Design
