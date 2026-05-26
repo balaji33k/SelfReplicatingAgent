@@ -187,6 +187,22 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(html)))
             self.end_headers()
             self.wfile.write(html)
+        elif clean.startswith("/data/") or clean.startswith("/generations/"):
+            # Serve these directly — never return 304, always fresh 200.
+            # SimpleHTTPRequestHandler can return 304 Not Modified which
+            # loadJSON() treats as null, breaking the dashboard.
+            file_path = ROOT / clean.lstrip("/")
+            if file_path.exists() and file_path.is_file():
+                data = file_path.read_bytes()
+                ctype = "application/json" if clean.endswith(".json") else "text/plain"
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            else:
+                self.send_response(404)
+                self.end_headers()
         elif clean == "/api/models":
             payload = {
                 "models": ALL_MODELS,
