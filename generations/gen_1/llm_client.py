@@ -1,30 +1,25 @@
 """
-llm_client.py — Multi-provider LLM client with 7 providers.
+llm_client.py — Multi-provider LLM client. All providers 100% free forever.
 
-Model: Qwen3-14B used everywhere it's available (same model across providers).
-       Falls back to best equivalent on providers that don't carry Qwen3.
+Priority (least limited → most limited):
+  0. Ollama      — local GPU (Colab/Kaggle), truly unlimited, qwen3:14b
+  1. Cerebras    — least limited free API, 2000 tok/s, llama-4-scout
+  2. SambaNova   — 2nd least limited, 1500 tok/s, llama-3.3-70b
+  3. OpenRouter  — free Qwen3-14B (:free tier), soft limits
+  4. Groq        — free Qwen-QwQ-32B, rolling TPM limits
+  5. Gemini      — last resort, 1500 RPD / 15 RPM
 
-Priority (least limited → most limited, Qwen3 providers first):
-  0. Ollama        — local GPU, truly unlimited,     model: qwen3:14b
-  1. Together AI   — least limited with Qwen3,       model: Qwen/Qwen3-14B
-  2. OpenRouter    — free Qwen3, soft limits,        model: qwen/qwen3-14b:free
-  3. Groq          — Qwen family (QwQ-32B),          model: qwen-qwq-32b
-  4. Cerebras      — no Qwen, but least limited API, model: llama-4-scout
-  5. SambaNova     — no Qwen, generous limits,       model: Llama-3.3-70B
-  6. Gemini        — last resort, most restrictive,  model: gemini-2.0-flash
+Together AI removed — not truly free (only $25 credit then paid).
+Combined free pool: ~5M+ tokens/day. Effectively unlimited for evolution.
 
-When a provider hits its limit → instantly switch to the next.
-Combined free pool: ~6M+ tokens/day. Effectively unlimited for evolution runs.
-
-Required env vars (set whichever you have):
-  OLLAMA_BASE_URL    — e.g. http://localhost:11434 (Colab/Kaggle/local)
+Env vars (set whichever you have — all free, no credit card needed):
+  OLLAMA_BASE_URL    — http://localhost:11434  (Colab/Kaggle)
   OLLAMA_MODEL       — default: qwen3:14b
-  TOGETHER_API_KEY   — free $25 credit at together.ai (has Qwen3-14B)
-  OPENROUTER_API_KEY — free at openrouter.ai  (has Qwen3-14B:free)
-  GROQ_API_KEY       — free at console.groq.com (has Qwen-QwQ-32B)
-  CEREBRAS_API_KEY   — free at cerebras.ai (Llama, 2000 tok/s)
-  SAMBANOVA_API_KEY  — free at sambanova.ai (Llama, 1500 tok/s)
-  GEMINI_API_KEY     — free at aistudio.google.com (last resort)
+  CEREBRAS_API_KEY   — free at cerebras.ai
+  SAMBANOVA_API_KEY  — free at sambanova.ai
+  OPENROUTER_API_KEY — free at openrouter.ai
+  GROQ_API_KEY       — free at console.groq.com
+  GEMINI_API_KEY     — free at aistudio.google.com
 """
 import concurrent.futures
 import datetime
@@ -48,39 +43,15 @@ _OLLAMA_BASE_URL     = os.getenv("OLLAMA_BASE_URL", "")
 _OLLAMA_MODEL        = os.getenv("OLLAMA_MODEL", "qwen3:14b")
 _OLLAMA_CALL_TIMEOUT = 180
 
-# ── Provider 1: Together AI — least limited with Qwen3-14B ───────────────────
-_TOGETHER_API_KEY    = os.getenv("TOGETHER_API_KEY", "")
-_TOGETHER_BASE_URL   = "https://api.together.xyz/v1"
-_TOGETHER_MODELS     = [
-    "Qwen/Qwen3-14B",                  # ← same model as Ollama, via API
-    "Qwen/Qwen2.5-Coder-32B-Instruct", # coding specialist fallback
-]
-
-# ── Provider 2: OpenRouter — free Qwen3-14B, soft limits ─────────────────────
-_OPENROUTER_API_KEY  = os.getenv("OPENROUTER_API_KEY", "")
-_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-_OPENROUTER_MODELS   = [
-    "qwen/qwen3-14b:free",             # ← same model as Ollama, free tier
-    "meta-llama/llama-4-scout:free",   # fallback
-]
-
-# ── Provider 3: Groq — Qwen family (QwQ-32B), rolling TPM ───────────────────
-_GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
-_GROQ_MODELS         = [
-    "qwen-qwq-32b",                              # best Qwen reasoning on Groq
-    "meta-llama/llama-4-scout-17b-16e-instruct", # fast fallback
-    "llama-3.1-8b-instant",                      # lightest fallback
-]
-
-# ── Provider 4: Cerebras — no Qwen, but least limited API, 2000 tok/s ────────
+# ── Provider 1: Cerebras — least limited free API, 2000 tok/s ────────────────
 _CEREBRAS_API_KEY    = os.getenv("CEREBRAS_API_KEY", "")
 _CEREBRAS_BASE_URL   = "https://api.cerebras.ai/v1"
 _CEREBRAS_MODELS     = [
-    "llama-4-scout-17b-16e-instruct",  # fastest available
+    "llama-4-scout-17b-16e-instruct",  # fastest, best quality
     "llama-3.3-70b",                   # larger fallback
 ]
 
-# ── Provider 5: SambaNova — no Qwen, generous limits, 1500 tok/s ─────────────
+# ── Provider 2: SambaNova — 2nd least limited, 1500 tok/s ────────────────────
 _SAMBANOVA_API_KEY   = os.getenv("SAMBANOVA_API_KEY", "")
 _SAMBANOVA_BASE_URL  = "https://api.sambanova.ai/v1"
 _SAMBANOVA_MODELS    = [
@@ -88,7 +59,23 @@ _SAMBANOVA_MODELS    = [
     "Meta-Llama-3.3-70B-Instruct",
 ]
 
-# ── Provider 6: Gemini — last resort, most restrictive (1500 RPD / 15 RPM) ───
+# ── Provider 3: OpenRouter — free Qwen3-14B (:free tier) ─────────────────────
+_OPENROUTER_API_KEY  = os.getenv("OPENROUTER_API_KEY", "")
+_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+_OPENROUTER_MODELS   = [
+    "qwen/qwen3-14b:free",            # same model as Ollama — free forever
+    "meta-llama/llama-4-scout:free",  # fallback
+]
+
+# ── Provider 4: Groq — free Qwen-QwQ-32B, rolling TPM limits ─────────────────
+_GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
+_GROQ_MODELS         = [
+    "qwen-qwq-32b",                              # best Qwen reasoning
+    "meta-llama/llama-4-scout-17b-16e-instruct", # fast fallback
+    "llama-3.1-8b-instant",                      # lightest fallback
+]
+
+# ── Provider 5: Gemini — last resort, most restrictive ───────────────────────
 _GEMINI_API_KEY      = (
     os.getenv("GEMINI_API_KEY", "")
     or os.getenv("GOOGLE_API_KEY", "")
@@ -99,6 +86,8 @@ _GEMINI_MODELS       = [
     "gemini-2.0-flash-lite",
 ]
 
+# Together AI removed — $25 credit only, not truly free forever.
+
 # ── Rate limit thresholds ─────────────────────────────────────────────────────
 _MAX_TPM_SLEEP_SEC     = 900    # >15 min wait → treat as daily limit, switch model
 _RECOVERY_WAIT_SEC     = 1800   # fallback wait if all providers exhausted (30 min)
@@ -108,7 +97,6 @@ _GEMINI_RPM_SLEEP_SEC  = 65     # 60s RPM window + 5s buffer
 # Models that belong to each provider (for routing)
 _CEREBRAS_MODEL_SET  = set(_CEREBRAS_MODELS)
 _SAMBANOVA_MODEL_SET = set(_SAMBANOVA_MODELS)
-_TOGETHER_MODEL_SET  = set(_TOGETHER_MODELS)
 _OPENROUTER_MODEL_SET= set(_OPENROUTER_MODELS)
 _GEMINI_MODEL_SET    = set(_GEMINI_MODELS)
 
@@ -116,7 +104,6 @@ _GEMINI_MODEL_SET    = set(_GEMINI_MODELS)
 def _provider_of(model: str) -> str:
     if model in _CEREBRAS_MODEL_SET:  return "cerebras"
     if model in _SAMBANOVA_MODEL_SET: return "sambanova"
-    if model in _TOGETHER_MODEL_SET:  return "together"
     if model in _OPENROUTER_MODEL_SET:return "openrouter"
     if model in _GEMINI_MODEL_SET:    return "gemini"
     return "groq"
@@ -155,7 +142,6 @@ class LLMClient:
             self._use_ollama
             or _CEREBRAS_API_KEY
             or _SAMBANOVA_API_KEY
-            or _TOGETHER_API_KEY
             or _GROQ_API_KEY
             or _OPENROUTER_API_KEY
             or _GEMINI_API_KEY
@@ -164,7 +150,7 @@ class LLMClient:
             raise EnvironmentError(
                 "No LLM provider available. Set at least one of: "
                 "OLLAMA_BASE_URL, CEREBRAS_API_KEY, SAMBANOVA_API_KEY, "
-                "TOGETHER_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY"
+                "GROQ_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY"
             )
 
         self._call_timeout = _OLLAMA_CALL_TIMEOUT if self._use_ollama else 30
@@ -206,9 +192,8 @@ class LLMClient:
         if self._use_ollama:        active.append(f"Ollama({self._ollama_model})")
         if _CEREBRAS_API_KEY:       active.append("Cerebras")
         if _SAMBANOVA_API_KEY:      active.append("SambaNova")
-        if _TOGETHER_API_KEY:       active.append("Together")
-        if _GROQ_API_KEY:           active.append("Groq")
         if _OPENROUTER_API_KEY:     active.append("OpenRouter")
+        if _GROQ_API_KEY:           active.append("Groq")
         if _GEMINI_API_KEY:         active.append("Gemini")
         logger.info(
             f"[llm_client] Active providers: {' → '.join(active)}\n"
@@ -258,20 +243,6 @@ class LLMClient:
                 model=model_name,
                 base_url=_SAMBANOVA_BASE_URL,
                 api_key=_SAMBANOVA_API_KEY,
-                temperature=self.config.temperature,
-                max_tokens=8192,
-                timeout=60,
-                max_retries=1,
-            )
-
-        # Together AI
-        if provider == "together":
-            if not _TOGETHER_API_KEY:
-                raise EnvironmentError("TOGETHER_API_KEY not set")
-            return ChatOpenAI(
-                model=model_name,
-                base_url=_TOGETHER_BASE_URL,
-                api_key=_TOGETHER_API_KEY,
                 temperature=self.config.temperature,
                 max_tokens=8192,
                 timeout=60,
@@ -344,24 +315,21 @@ class LLMClient:
 
     def _build_fallback_chain(self) -> List[str]:
         """
-        Ordered list of all available models — least limited first.
+        All providers 100% free forever. Ordered: least limited → most limited.
 
-        Qwen3-14B providers first (same model, different hosts):
-          Together → OpenRouter → Groq (Qwen family)
+          1. Cerebras    — least limited, 2000 tok/s (Llama)
+          2. SambaNova   — 1500 tok/s (Llama)
+          3. OpenRouter  — free Qwen3-14B:free
+          4. Groq        — free Qwen-QwQ-32B, rolling TPM
+          5. Gemini      — last resort, 1500 RPD
 
-        Non-Qwen fast fallbacks (when all Qwen providers exhausted):
-          Cerebras → SambaNova → Gemini
-
-        Ollama is handled as a separate fast-path before this chain.
+        Ollama handled as fast-path before this chain (if running locally).
         """
         chain = []
-        # ── Qwen3 providers (same model family) ──────────────────────────────
-        if _TOGETHER_API_KEY:   chain.extend(_TOGETHER_MODELS)    # Qwen3-14B
-        if _OPENROUTER_API_KEY: chain.extend(_OPENROUTER_MODELS)  # Qwen3-14B:free
-        if _GROQ_API_KEY:       chain.extend(_GROQ_MODELS)        # Qwen-QwQ-32B
-        # ── Non-Qwen fallbacks (least limited first) ─────────────────────────
-        if _CEREBRAS_API_KEY:   chain.extend(_CEREBRAS_MODELS)    # Llama, 2000 tok/s
-        if _SAMBANOVA_API_KEY:  chain.extend(_SAMBANOVA_MODELS)   # Llama, 1500 tok/s
+        if _CEREBRAS_API_KEY:   chain.extend(_CEREBRAS_MODELS)    # least limited
+        if _SAMBANOVA_API_KEY:  chain.extend(_SAMBANOVA_MODELS)   # 2nd least
+        if _OPENROUTER_API_KEY: chain.extend(_OPENROUTER_MODELS)  # free Qwen3
+        if _GROQ_API_KEY:       chain.extend(_GROQ_MODELS)        # free Qwen
         if _GEMINI_API_KEY:     chain.extend(_GEMINI_MODELS)      # last resort
         return chain
 
@@ -596,12 +564,11 @@ class LLMClient:
                 }
 
             provider_labels = {
-                "together":  (1, "Together AI — Qwen3-14B ★ same model"),
-                "openrouter":(2, "OpenRouter  — Qwen3-14B:free ★ same model"),
-                "groq":      (3, "Groq        — Qwen-QwQ-32B"),
-                "cerebras":  (4, "Cerebras    — Llama 2000 tok/s"),
-                "sambanova": (5, "SambaNova   — Llama 1500 tok/s"),
-                "gemini":    (6, "Gemini      — last resort"),
+                "cerebras":  (1, "Cerebras   — least limited, 2000 tok/s ✅ free"),
+                "sambanova": (2, "SambaNova  — 1500 tok/s ✅ free"),
+                "openrouter":(3, "OpenRouter — Qwen3-14B:free ✅ free"),
+                "groq":      (4, "Groq       — Qwen-QwQ-32B ✅ free"),
+                "gemini":    (5, "Gemini     — last resort ✅ free"),
             }
 
             for m in chain:
