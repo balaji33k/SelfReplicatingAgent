@@ -1,25 +1,33 @@
 """
 llm_client.py — Multi-provider LLM client. All providers 100% free forever.
 
+Model: Llama-4-Scout used across ALL providers (same model everywhere).
+       Gemini kept as last resort (Google-only, different ecosystem).
+
 Priority (least limited → most limited):
-  0. Ollama      — local GPU (Colab/Kaggle), truly unlimited, qwen3:14b
-  1. Cerebras    — least limited free API, 2000 tok/s, llama-4-scout
-  2. SambaNova   — 2nd least limited, 1500 tok/s, llama-3.3-70b
-  3. OpenRouter  — free Qwen3-14B (:free tier), soft limits
-  4. Groq        — free Qwen-QwQ-32B, rolling TPM limits
-  5. Gemini      — last resort, 1500 RPD / 15 RPM
+  0. Ollama      — local GPU, unlimited,       llama4:scout (or qwen3:14b)
+  1. Cerebras    — least limited, 2000 tok/s,  llama-4-scout ✅ same model
+  2. SambaNova   — 1500 tok/s,                 llama-4-scout ✅ same model
+  3. OpenRouter  — free :free tier,            llama-4-scout ✅ same model
+  4. Groq        — rolling TPM,                llama-4-scout ✅ same model
+  5. Gemini      — last resort, 1500 RPD       gemini-2.0-flash (fallback only)
 
-Together AI removed — not truly free (only $25 credit then paid).
-Combined free pool: ~5M+ tokens/day. Effectively unlimited for evolution.
+Why Llama-4-Scout:
+  - Only model available FREE on Cerebras + SambaNova + OpenRouter + Groq
+  - 17B active params (MoE, 109B total) — fast and capable
+  - Released April 2025 by Meta
+  - Consistent results across all providers (same weights)
 
-Env vars (set whichever you have — all free, no credit card needed):
+Combined free pool: ~5M+ tokens/day. Effectively unlimited.
+
+Env vars (all free, no credit card needed):
   OLLAMA_BASE_URL    — http://localhost:11434  (Colab/Kaggle)
-  OLLAMA_MODEL       — default: qwen3:14b
+  OLLAMA_MODEL       — default: llama4:scout
   CEREBRAS_API_KEY   — free at cerebras.ai
   SAMBANOVA_API_KEY  — free at sambanova.ai
   OPENROUTER_API_KEY — free at openrouter.ai
   GROQ_API_KEY       — free at console.groq.com
-  GEMINI_API_KEY     — free at aistudio.google.com
+  GEMINI_API_KEY     — free at aistudio.google.com (last resort)
 """
 import concurrent.futures
 import datetime
@@ -40,42 +48,46 @@ logger = logging.getLogger(__name__)
 
 # ── Provider 0: Ollama (local, no limits) ────────────────────────────────────
 _OLLAMA_BASE_URL     = os.getenv("OLLAMA_BASE_URL", "")
-_OLLAMA_MODEL        = os.getenv("OLLAMA_MODEL", "qwen3:14b")
+_OLLAMA_MODEL        = os.getenv("OLLAMA_MODEL", "llama4:scout")  # same model as all API providers
 _OLLAMA_CALL_TIMEOUT = 180
 
-# ── Provider 1: Cerebras — least limited free API, 2000 tok/s ────────────────
+# ── UNIVERSAL MODEL: Llama-4-Scout (same on all providers) ───────────────────
+# Same model, same weights, consistent results across all free providers.
+_SCOUT = "llama-4-scout"   # logical name — each provider has slightly different string
+
+# ── Provider 1: Cerebras — least limited, 2000 tok/s ─────────────────────────
 _CEREBRAS_API_KEY    = os.getenv("CEREBRAS_API_KEY", "")
 _CEREBRAS_BASE_URL   = "https://api.cerebras.ai/v1"
 _CEREBRAS_MODELS     = [
-    "llama-4-scout-17b-16e-instruct",  # fastest, best quality
-    "llama-3.3-70b",                   # larger fallback
+    "llama-4-scout-17b-16e-instruct",  # ✅ Llama-4-Scout
+    "llama-3.3-70b",                   # fallback if Scout unavailable
 ]
 
-# ── Provider 2: SambaNova — 2nd least limited, 1500 tok/s ────────────────────
+# ── Provider 2: SambaNova — 1500 tok/s ───────────────────────────────────────
 _SAMBANOVA_API_KEY   = os.getenv("SAMBANOVA_API_KEY", "")
 _SAMBANOVA_BASE_URL  = "https://api.sambanova.ai/v1"
 _SAMBANOVA_MODELS    = [
-    "Llama-4-Scout-17B-16E-Instruct",
-    "Meta-Llama-3.3-70B-Instruct",
+    "Llama-4-Scout-17B-16E-Instruct",  # ✅ Llama-4-Scout
+    "Meta-Llama-3.3-70B-Instruct",     # fallback
 ]
 
-# ── Provider 3: OpenRouter — free Qwen3-14B (:free tier) ─────────────────────
+# ── Provider 3: OpenRouter — free :free tier ──────────────────────────────────
 _OPENROUTER_API_KEY  = os.getenv("OPENROUTER_API_KEY", "")
 _OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 _OPENROUTER_MODELS   = [
-    "qwen/qwen3-14b:free",            # same model as Ollama — free forever
-    "meta-llama/llama-4-scout:free",  # fallback
+    "meta-llama/llama-4-scout:free",   # ✅ Llama-4-Scout free
+    "meta-llama/llama-3.3-70b:free",   # fallback
 ]
 
-# ── Provider 4: Groq — free Qwen-QwQ-32B, rolling TPM limits ─────────────────
+# ── Provider 4: Groq — rolling TPM limits ────────────────────────────────────
 _GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
 _GROQ_MODELS         = [
-    "qwen-qwq-32b",                              # best Qwen reasoning
-    "meta-llama/llama-4-scout-17b-16e-instruct", # fast fallback
-    "llama-3.1-8b-instant",                      # lightest fallback
+    "meta-llama/llama-4-scout-17b-16e-instruct",  # ✅ Llama-4-Scout
+    "llama-3.3-70b-versatile",                     # fallback
+    "llama-3.1-8b-instant",                        # lightest fallback
 ]
 
-# ── Provider 5: Gemini — last resort, most restrictive ───────────────────────
+# ── Provider 5: Gemini — last resort (Google-only, different ecosystem) ───────
 _GEMINI_API_KEY      = (
     os.getenv("GEMINI_API_KEY", "")
     or os.getenv("GOOGLE_API_KEY", "")
@@ -85,8 +97,6 @@ _GEMINI_MODELS       = [
     "gemini-2.0-flash",
     "gemini-2.0-flash-lite",
 ]
-
-# Together AI removed — $25 credit only, not truly free forever.
 
 # ── Rate limit thresholds ─────────────────────────────────────────────────────
 _MAX_TPM_SLEEP_SEC     = 900    # >15 min wait → treat as daily limit, switch model
