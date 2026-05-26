@@ -4,13 +4,13 @@ llm_client.py — Multi-provider LLM client. All providers 100% free forever.
 Model: Llama-4-Scout used across ALL providers (same model everywhere).
        Gemini kept as last resort (Google-only, different ecosystem).
 
-Priority (least limited → most limited):
-  0. Ollama      — local GPU, unlimited,       llama4:scout (or qwen3:14b)
-  1. Cerebras    — least limited, 2000 tok/s,  llama-4-scout ✅ same model
-  2. SambaNova   — 1500 tok/s,                 llama-4-scout ✅ same model
-  3. OpenRouter  — free :free tier,            llama-4-scout ✅ same model
-  4. Groq        — rolling TPM,                llama-4-scout ✅ same model
-  5. Gemini      — last resort, 1500 RPD       gemini-2.0-flash (fallback only)
+Priority (max speed + least limited combined):
+  0. Ollama      — local, unlimited,           llama4:scout  ∞ tok/s
+  1. Cerebras    — 2000 tok/s, least limited,  llama-4-scout ✅ same model
+  2. SambaNova   — 1500 tok/s, generous,       llama-4-scout ✅ same model
+  3. Groq        —  800 tok/s, rolling TPM,    llama-4-scout ✅ same model
+  4. OpenRouter  —  200 tok/s, soft limits,    llama-4-scout ✅ same model
+  5. Gemini      —  400 tok/s, most limited,   gemini-2.0-flash (last resort)
 
 Why Llama-4-Scout:
   - Only model available FREE on Cerebras + SambaNova + OpenRouter + Groq
@@ -320,22 +320,22 @@ class LLMClient:
 
     def _build_fallback_chain(self) -> List[str]:
         """
-        All providers 100% free forever. Ordered: least limited → most limited.
+        Sorted by: max speed + least limited (combined score).
 
-          1. Cerebras    — least limited, 2000 tok/s (Llama)
-          2. SambaNova   — 1500 tok/s (Llama)
-          3. OpenRouter  — free Qwen3-14B:free
-          4. Groq        — free Qwen-QwQ-32B, rolling TPM
-          5. Gemini      — last resort, 1500 RPD
+          1. Cerebras   — 2000 tok/s + least limited  ← BEST
+          2. SambaNova  — 1500 tok/s + generous
+          3. Groq       —  800 tok/s + rolling TPM
+          4. OpenRouter —  200 tok/s + soft limits    (slow but free)
+          5. Gemini     —  400 tok/s + most limited   (last resort)
 
-        Ollama handled as fast-path before this chain (if running locally).
+        Ollama fast-path handled before this chain.
         """
         chain = []
-        if _CEREBRAS_API_KEY:   chain.extend(_CEREBRAS_MODELS)    # least limited
-        if _SAMBANOVA_API_KEY:  chain.extend(_SAMBANOVA_MODELS)   # 2nd least
-        if _OPENROUTER_API_KEY: chain.extend(_OPENROUTER_MODELS)  # free Qwen3
-        if _GROQ_API_KEY:       chain.extend(_GROQ_MODELS)        # free Qwen
-        if _GEMINI_API_KEY:     chain.extend(_GEMINI_MODELS)      # last resort
+        if _CEREBRAS_API_KEY:   chain.extend(_CEREBRAS_MODELS)   # 2000 tok/s, least limited
+        if _SAMBANOVA_API_KEY:  chain.extend(_SAMBANOVA_MODELS)  # 1500 tok/s, generous
+        if _GROQ_API_KEY:       chain.extend(_GROQ_MODELS)       #  800 tok/s, rolling TPM
+        if _OPENROUTER_API_KEY: chain.extend(_OPENROUTER_MODELS) #  200 tok/s, soft limits
+        if _GEMINI_API_KEY:     chain.extend(_GEMINI_MODELS)     #  400 tok/s, most restricted
         return chain
 
     # ── Qwen3 thinking mode ───────────────────────────────────────────────────
@@ -569,11 +569,11 @@ class LLMClient:
                 }
 
             provider_labels = {
-                "cerebras":  (1, "Cerebras   — least limited, 2000 tok/s ✅ free"),
-                "sambanova": (2, "SambaNova  — 1500 tok/s ✅ free"),
-                "openrouter":(3, "OpenRouter — Qwen3-14B:free ✅ free"),
-                "groq":      (4, "Groq       — Qwen-QwQ-32B ✅ free"),
-                "gemini":    (5, "Gemini     — last resort ✅ free"),
+                "cerebras":  (1, "Cerebras   — 2000 tok/s, least limited ✅"),
+                "sambanova": (2, "SambaNova  — 1500 tok/s, generous ✅"),
+                "groq":      (3, "Groq       —  800 tok/s, rolling TPM ✅"),
+                "openrouter":(4, "OpenRouter —  200 tok/s, soft limits ✅"),
+                "gemini":    (5, "Gemini     —  400 tok/s, most limited ✅"),
             }
 
             for m in chain:
