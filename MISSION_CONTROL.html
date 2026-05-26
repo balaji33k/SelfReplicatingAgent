@@ -452,6 +452,57 @@ footer{text-align:center;font-size:.6rem;color:#1e293b;padding:8px 0}
 <footer>Self-Replicating Agent · Mission Control · refreshes every 3 s</footer>
 </div>
 
+<!-- ── FAILURE DETAIL MODAL — must be in DOM before <script> runs ── -->
+<style>
+#fail-detail-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;
+  align-items:center;justify-content:center;padding:1rem}
+#fail-detail-modal.open{display:flex}
+.fdm{background:#0f1117;border:1px solid rgba(239,68,68,.3);border-radius:12px;
+  width:100%;max-width:780px;max-height:90vh;overflow-y:auto;padding:1.5rem;position:relative}
+.fdm-close{position:absolute;top:.8rem;right:1rem;background:none;border:none;
+  color:#9ca3af;font-size:1.4rem;cursor:pointer;line-height:1}
+.fdm-close:hover{color:#ef4444}
+.fdm h2{margin:0 0 .3rem;font-size:1rem;color:#ef4444}
+.fdm-sub{font-size:.75rem;color:#6b7280;margin-bottom:1rem;word-break:break-all}
+.fdm-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem .8rem;margin-bottom:1rem}
+.fdm-kv{font-size:.75rem}.fdm-k{color:#6b7280;margin-bottom:.1rem}
+.fdm-v{color:#e2e8f0;font-weight:600}
+.fdm-section{margin-bottom:1rem}
+.fdm-section-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;
+  color:#6b7280;margin-bottom:.3rem}
+.fdm-pre{background:#0a0c10;border:1px solid #1e2433;border-radius:6px;
+  padding:.6rem .8rem;font-family:monospace;font-size:.72rem;color:#e2e8f0;
+  white-space:pre-wrap;word-break:break-all;max-height:180px;overflow-y:auto;margin:0}
+.fdm-pre.stderr{border-color:rgba(239,68,68,.2);color:#fca5a5}
+.fdm-pre.code{color:#a5f3fc;max-height:520px}
+</style>
+
+<div id="fail-detail-modal">
+  <div class="fdm">
+    <button class="fdm-close" id="fdm-close-btn">✕</button>
+    <h2>❌ Task Failure — <span id="fd-title"></span></h2>
+    <div class="fdm-sub" id="fd-desc"></div>
+    <div class="fdm-grid">
+      <div class="fdm-kv"><div class="fdm-k">Error type</div><div class="fdm-v" id="fd-error" style="color:#ef4444"></div></div>
+      <div class="fdm-kv"><div class="fdm-k">Runtime</div><div class="fdm-v" id="fd-runtime"></div></div>
+      <div class="fdm-kv"><div class="fdm-k">Agents run</div><div class="fdm-v" id="fd-agents" style="font-size:.7rem"></div></div>
+      <div class="fdm-kv"><div class="fdm-k">Agent failures</div><div class="fdm-v" id="fd-agent-fails" style="font-size:.68rem;white-space:pre"></div></div>
+    </div>
+    <div class="fdm-section">
+      <div class="fdm-section-label">🔴 Error / stderr</div>
+      <pre class="fdm-pre stderr" id="fd-stderr"></pre>
+    </div>
+    <div class="fdm-section">
+      <div class="fdm-section-label">📤 stdout</div>
+      <pre class="fdm-pre" id="fd-stdout"></pre>
+    </div>
+    <div class="fdm-section">
+      <div class="fdm-section-label">💻 Generated code <span id="fd-code-lbl" style="font-weight:400;text-transform:none;letter-spacing:0"></span></div>
+      <pre class="fdm-pre code" id="fd-code"></pre>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ────────────────── STATE ────────────────── */
 var S={hb:null,ms:null,prog:null,ri:null,evo:null,eplan:null};
@@ -868,40 +919,35 @@ function renderTasks(){
   grid.innerHTML=html;
   empty.style.display=html?'none':'block';
   empty.textContent=_filt==='all'?'No tasks yet.':'No tasks match.';
+  // Attach click listeners directly — more reliable than document-level delegation
+  grid.querySelectorAll('[data-fail-tid]').forEach(function(card){
+    card.addEventListener('click', function(){ showFailDetail(this.getAttribute('data-fail-tid')); });
+  });
 }
 
-/* Event delegation — avoids inline onclick which can be blocked by CSP */
-document.addEventListener('click', function(e){
-  // Open failure detail modal
-  var card=e.target.closest('[data-fail-tid]');
-  if(card){ showFailDetail(card.getAttribute('data-fail-tid')); return; }
-  // Close modal via ✕ button
-  var closeBtn=e.target.closest('[data-close-modal]');
-  if(closeBtn){ var m=document.getElementById(closeBtn.getAttribute('data-close-modal')); if(m)m.style.display='none'; return; }
-  // Close modal by clicking dark overlay
-  if(e.target.id==='fail-detail-modal'){ e.target.style.display='none'; return; }
-});
+/* Modal open/close helpers */
+var _modal=document.getElementById('fail-detail-modal');
+var _fdmClose=document.getElementById('fdm-close-btn');
+if(_fdmClose) _fdmClose.addEventListener('click', function(){ _modal.classList.remove('open'); });
+if(_modal)    _modal.addEventListener('click', function(e){ if(e.target===_modal) _modal.classList.remove('open'); });
 
 function showFailDetail(tid){
+  if(!_modal) return;
   var prog=S.prog;
-  var m=document.getElementById('fail-detail-modal');
-  if(!m) return;
 
-  // Populate title immediately so the modal can open even if data is incomplete
   document.getElementById('fd-title').textContent=tid;
 
   if(!prog||!prog.results||!prog.results[tid]){
-    // Modal opens but shows a "data not yet available" message
     document.getElementById('fd-desc').textContent='';
     document.getElementById('fd-error').textContent='—';
     document.getElementById('fd-runtime').textContent='—';
     document.getElementById('fd-agents').textContent='—';
     document.getElementById('fd-agent-fails').textContent='—';
-    document.getElementById('fd-stderr').textContent='Result data not loaded yet. Try again in a moment.';
+    document.getElementById('fd-stderr').textContent='Result data not loaded yet — wait a moment and click again.';
     document.getElementById('fd-stdout').textContent='(none)';
     document.getElementById('fd-code').textContent='(none)';
     var lbl0=document.getElementById('fd-code-lbl'); if(lbl0)lbl0.textContent='';
-    m.style.display='flex';
+    _modal.classList.add('open');
     return;
   }
 
@@ -913,14 +959,14 @@ function showFailDetail(tid){
   document.getElementById('fd-agents').textContent=(r.agents_used||[]).join(' → ')||'—';
   var af=r.agent_failures||{};
   document.getElementById('fd-agent-fails').textContent=
-    Object.keys(af).length?Object.entries(af).map(function(e){return e[0]+': '+e[1];}).join('\n'):'—';
+    Object.keys(af).length?Object.entries(af).map(function(kv){return kv[0]+': '+kv[1];}).join('\n'):'—';
   document.getElementById('fd-stderr').textContent=(r.stderr||'').trim()||'(none)';
   document.getElementById('fd-stdout').textContent=(r.stdout||'').trim()||'(none)';
   var snippet=(r.code_snippet||'').trim();
   document.getElementById('fd-code').textContent=snippet||'(not captured yet — run in progress)';
   var lbl=document.getElementById('fd-code-lbl');
   if(lbl) lbl.textContent=snippet?'— '+snippet.split('\n').length+' lines':'';
-  m.style.display='flex';
+  _modal.classList.add('open');
 }
 
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -967,54 +1013,5 @@ tick();
 setInterval(tick,3000);
 </script>
 
-<!-- ── FAILURE DETAIL MODAL ───────────────────────────────────── -->
-<style>
-#fail-detail-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;
-  align-items:center;justify-content:center;padding:1rem}
-.fdm{background:#0f1117;border:1px solid rgba(239,68,68,.3);border-radius:12px;
-  width:100%;max-width:780px;max-height:90vh;overflow-y:auto;padding:1.5rem;position:relative}
-.fdm-close{position:absolute;top:.8rem;right:1rem;background:none;border:none;
-  color:#9ca3af;font-size:1.4rem;cursor:pointer;line-height:1}
-.fdm-close:hover{color:#ef4444}
-.fdm h2{margin:0 0 .3rem;font-size:1rem;color:#ef4444}
-.fdm-sub{font-size:.75rem;color:#6b7280;margin-bottom:1rem;word-break:break-all}
-.fdm-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem .8rem;margin-bottom:1rem}
-.fdm-kv{font-size:.75rem}.fdm-k{color:#6b7280;margin-bottom:.1rem}
-.fdm-v{color:#e2e8f0;font-weight:600}
-.fdm-section{margin-bottom:1rem}
-.fdm-section-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;
-  color:#6b7280;margin-bottom:.3rem}
-.fdm-pre{background:#0a0c10;border:1px solid #1e2433;border-radius:6px;
-  padding:.6rem .8rem;font-family:monospace;font-size:.72rem;color:#e2e8f0;
-  white-space:pre-wrap;word-break:break-all;max-height:180px;overflow-y:auto;margin:0}
-.fdm-pre.stderr{border-color:rgba(239,68,68,.2);color:#fca5a5}
-.fdm-pre.code{color:#a5f3fc;max-height:520px}
-</style>
-
-<div id="fail-detail-modal">
-  <div class="fdm">
-    <button class="fdm-close" data-close-modal="fail-detail-modal">✕</button>
-    <h2>❌ Task Failure — <span id="fd-title"></span></h2>
-    <div class="fdm-sub" id="fd-desc"></div>
-    <div class="fdm-grid">
-      <div class="fdm-kv"><div class="fdm-k">Error type</div><div class="fdm-v" id="fd-error" style="color:#ef4444"></div></div>
-      <div class="fdm-kv"><div class="fdm-k">Runtime</div><div class="fdm-v" id="fd-runtime"></div></div>
-      <div class="fdm-kv"><div class="fdm-k">Agents run</div><div class="fdm-v" id="fd-agents" style="font-size:.7rem"></div></div>
-      <div class="fdm-kv"><div class="fdm-k">Agent failures</div><div class="fdm-v" id="fd-agent-fails" style="font-size:.68rem;white-space:pre"></div></div>
-    </div>
-    <div class="fdm-section">
-      <div class="fdm-section-label">🔴 Error / stderr</div>
-      <pre class="fdm-pre stderr" id="fd-stderr"></pre>
-    </div>
-    <div class="fdm-section">
-      <div class="fdm-section-label">📤 stdout</div>
-      <pre class="fdm-pre" id="fd-stdout"></pre>
-    </div>
-    <div class="fdm-section">
-      <div class="fdm-section-label">💻 Generated code <span id="fd-code-lbl" style="font-weight:400;text-transform:none;letter-spacing:0"></span></div>
-      <pre class="fdm-pre code" id="fd-code"></pre>
-    </div>
-  </div>
-</div>
 </body>
 </html>
