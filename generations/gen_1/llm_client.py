@@ -97,7 +97,7 @@ class LLMClient:
         # Hard cap: if a single API call takes longer than this, treat it as a hung
         # connection and raise so the retry loop can switch models.
         # Uses concurrent.futures thread timeout — actually enforced unlike client param.
-        self._call_timeout = 60   # 60s max per call
+        self._call_timeout = 30   # 30s max per model attempt — cycle through all 5 faster
 
         # Track exhausted/unavailable models across both providers
         self._exhausted_models: set = set()

@@ -36,6 +36,38 @@ _HEARTBEAT_PATH = _PROJECT_ROOT / "data" / "heartbeat.json"
 _GEN_TOPOLOGY: dict = {}  # set once in run_generation, included in every heartbeat write
 
 
+def _probe_apis(llm_client, out_path):
+    """Fire a tiny test prompt at each provider and record latency/error to out_path."""
+    import concurrent.futures as _cf, time as _t
+    results = {}
+    test_prompt = "Reply with one word: hello"
+    for model_id in ["gemini-2.0-flash", "meta-llama/llama-4-scout-17b-16e-instruct"]:
+        t0 = _t.time()
+        try:
+            old_model = llm_client.config.model_name
+            llm_client._switch_to_model(model_id)
+            _ex = _cf.ThreadPoolExecutor(max_workers=1)
+            from langchain_core.messages import HumanMessage
+            _fut = _ex.submit(llm_client._llm.invoke, [HumanMessage(content=test_prompt)])
+            try:
+                resp = _fut.result(timeout=20)
+                results[model_id] = {"ok": True, "latency": round(_t.time()-t0,2), "snippet": str(getattr(resp,"content",""))[:40]}
+            except _cf.TimeoutError:
+                results[model_id] = {"ok": False, "error": "timeout_20s", "latency": 20}
+            finally:
+                _ex.shutdown(wait=False)
+            llm_client._switch_to_model(old_model)
+        except Exception as e:
+            results[model_id] = {"ok": False, "error": str(e)[:120], "latency": round(_t.time()-t0,2)}
+    try:
+        import json as _j
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(_j.dumps({"probed_at": __import__("datetime").datetime.utcnow().isoformat()+"Z", "results": results}, indent=2))
+        logger.info(f"[probe] API connectivity: {results}")
+    except Exception:
+        pass
+
+
 def _write_progress(gen_num: int, task_ids: list, completed: dict, descriptions: dict = None) -> None:
     """Write per-task progress to data/gen_N_progress.json — read by the dashboard."""
     try:
@@ -133,6 +165,10 @@ def run_generation(gen_config: Config, generation_number: int):
 
     # 2. Build multi-agent pipeline
     llm_client = LLMClient(gen_config.llm_config)
+
+    # Quick API connectivity probe — writes data/api_probe.json so we can diagnose hangs
+    _probe_apis(llm_client, _PROJECT_ROOT / "data" / "api_probe.json")
+
     pipeline = AgentPipeline(llm_client, gen_config.topology)
     logger.info(
         f"Pipeline topology: critic={gen_config.topology.enable_critic}, "
@@ -186,7 +222,7 @@ def run_generation(gen_config: Config, generation_number: int):
         # SIGALRM fires at the OS level and interrupts ANY blocking call
         # including C-extension network I/O — unlike thread-based timeouts.
         # 240s = 4 min max per task (covers multiple model fallback retries).
-        _TASK_TIMEOUT_SEC = 120
+        _TASK_TIMEOUT_SEC = 360   # 6 × 60s = covers all 5 models + recovery
 
         def _task_alarm_handler(signum, frame):
             raise TimeoutError(
