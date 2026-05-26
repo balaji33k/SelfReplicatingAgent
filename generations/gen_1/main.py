@@ -11,6 +11,7 @@ Flow per task:
 import argparse
 import logging
 import os
+import signal
 import sys
 import json
 from pathlib import Path
@@ -181,9 +182,24 @@ def run_generation(gen_config: Config, generation_number: int):
 
         phase_cb = _make_phase_cb()
 
+        # ── Per-task hard timeout (SIGALRM) ────────────────────────────
+        # SIGALRM fires at the OS level and interrupts ANY blocking call
+        # including C-extension network I/O — unlike thread-based timeouts.
+        # 240s = 4 min max per task (covers multiple model fallback retries).
+        _TASK_TIMEOUT_SEC = 240
+
+        def _task_alarm_handler(signum, frame):
+            raise TimeoutError(
+                f"Task {task.task_id} exceeded {_TASK_TIMEOUT_SEC}s hard limit"
+            )
+
+        signal.signal(signal.SIGALRM, _task_alarm_handler)
+        signal.alarm(_TASK_TIMEOUT_SEC)
+
         try:
             contract = _task_to_contract(task)
             result = pipeline.solve(contract, phase_callback=phase_cb)
+            signal.alarm(0)  # cancel alarm on success
 
             result_dict = result.to_dict()
             all_execution_results.append(result_dict)
@@ -210,7 +226,18 @@ def run_generation(gen_config: Config, generation_number: int):
                 + (f" | agents: {result.agents_used}" if not result.success else "")
             )
 
+        except TimeoutError as e:
+            signal.alarm(0)  # cancel alarm
+            logger.error(f"Task {task.task_id} TIMED OUT: {e} — marking as failed and continuing")
+            failed_count += 1
+            completed_progress[task.task_id] = {
+                "status": "fail",
+                "error_type": "timeout",
+                "runtime": _TASK_TIMEOUT_SEC,
+            }
+            _write_progress(generation_number, task_ids, completed_progress, task_descriptions)
         except Exception as e:
+            signal.alarm(0)  # cancel alarm
             logger.exception(f"Unexpected error for task {task.task_id}: {e}")
             failed_count += 1
             error_result = {
