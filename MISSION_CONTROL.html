@@ -216,11 +216,12 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .tc-time{font-size:.58rem;font-family:monospace;color:var(--muted)}
 /* progress bar inside each task card */
 .tc-bar{height:3px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden;margin-top:2px}
-.tc-bar-fill{height:100%;border-radius:2px;transition:width .6s ease}
+.tc-bar-fill{height:100%;border-radius:2px;transition:width .8s ease}
 .tc-pass .tc-bar-fill{background:var(--lime)}
 .tc-fail .tc-bar-fill{background:rgba(239,68,68,.5)}
-.tc-run .tc-bar-fill{background:var(--amber);animation:shimmer 1.2s infinite;background-size:200% 100%}
+.tc-run .tc-bar-fill{background:var(--amber);animation:breathe 1.4s ease-in-out infinite}
 .tc-pend .tc-bar-fill{background:rgba(255,255,255,.06)}
+@keyframes breathe{0%,100%{opacity:.55}50%{opacity:1}}
 
 /* ── CONTROLS ── */
 .ctrl-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -896,11 +897,27 @@ function renderTasks(){
       cls='tc-'+(r.status==='pass'?'pass':'fail');
       pill=r.status==='pass'?'PASS':'FAIL';
       bw=100;
-    }else if(isRun){st='run';cls='tc-run';pill='RUNNING';bw=50;}
+    }else if(isRun){
+      st='run';cls='tc-run';pill='RUNNING';
+      // Width reflects which agent is currently working — advances as each phase completes
+      var phaseProgress={
+        'thinking':12, 'writing_unit_tests':25, 'writing_code':42,
+        'reviewing':58, 'revising':68, 'compiling':80,
+        'running_tests':88, 'debugging':93, 'done':100
+      };
+      var curPhase=hb?hb.current_phase:'';
+      bw=phaseProgress[curPhase]||8; // 8% = "started, agent not yet named"
+    }
     else{st='pend';cls='tc-pend';pill='–';bw=0;}
 
     if(_filt!=='all'&&_filt!==st)return '';
-    var err=r?(r.error_type||''):(isRun?(hb.current_phase||''):'');
+    var phaseLabel={'thinking':'🧠','writing_unit_tests':'🧪','writing_code':'✍️',
+      'reviewing':'🔍','revising':'✏️','compiling':'⚙️','running_tests':'🧪','debugging':'🐛'};
+    if(isRun&&hb&&hb.current_phase){
+      var icon=phaseLabel[hb.current_phase]||'▶';
+      pill=icon+' '+hb.current_phase.replace(/_/g,' ');
+    }
+    var err=r?(r.error_type||''):(isRun?'':'');
     var rt=r?r.runtime.toFixed(1)+'s':(isRun?'…':'');
     var shortId=tid.length>20?'…'+tid.slice(-18):tid;
     var isFail=r&&r.status==='fail';
