@@ -247,7 +247,7 @@ def run_generation(gen_config: Config, generation_number: int):
         # SIGALRM fires at the OS level and interrupts ANY blocking call
         # including C-extension network I/O — unlike thread-based timeouts.
         # 240s = 4 min max per task (covers multiple model fallback retries).
-        _TASK_TIMEOUT_SEC = 240   # 4 min: models switch-fast now (no per-model sleep)
+        _TASK_TIMEOUT_SEC = 480   # 8 min: covers smart recovery sleep (~5 min) + LLM call (30s)
 
         def _task_alarm_handler(signum, frame):
             raise TimeoutError(
