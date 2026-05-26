@@ -276,6 +276,11 @@ def run_generation(gen_config: Config, generation_number: int):
                 "status": "pass" if result.success else "fail",
                 "error_type": result.error_type or "",
                 "runtime": round(result.runtime, 2),
+                "stderr":  (result.stderr or "")[:600],
+                "stdout":  (result.stdout or "")[:300],
+                "agents_used": result.agents_used,
+                "agent_failures": result.agent_failures,
+                "code_snippet": (result.final_code or "")[:800],
             }
             _write_progress(generation_number, task_ids, completed_progress, task_descriptions)
 
@@ -295,6 +300,11 @@ def run_generation(gen_config: Config, generation_number: int):
                 "status": "fail",
                 "error_type": "timeout",
                 "runtime": _TASK_TIMEOUT_SEC,
+                "stderr": str(e),
+                "stdout": "",
+                "agents_used": [],
+                "agent_failures": {},
+                "code_snippet": "",
             }
             _write_progress(generation_number, task_ids, completed_progress, task_descriptions)
         except Exception as e:

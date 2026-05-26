@@ -718,11 +718,12 @@ function renderTasks(){
     var err=r?(r.error_type||''):(isRun?(hb.current_phase||''):'');
     var rt=r?r.runtime.toFixed(1)+'s':(isRun?'…':'');
     var shortId=tid.length>20?'…'+tid.slice(-18):tid;
-    return '<div class="tcard '+cls+'" title="'+esc(tid)+'">'+
-      '<div class="tc-id">'+esc(shortId)+'</div>'+
+    var clickable=r&&r.status==='fail'?' style="cursor:pointer" onclick="showFailDetail(\''+tid.replace(/'/g,"\\'")+'\')"':'';
+    return '<div class="tcard '+cls+'"'+clickable+' title="'+(r&&r.status==='fail'?'Click to see failure details':esc(tid))+'">'+
+      '<div class="tc-id">'+esc(shortId)+(r&&r.status==='fail'?' <span style="font-size:.6rem;opacity:.6">🔍</span>':'')+'</div>'+
       '<div class="tc-row">'+
         '<span class="tc-pill">'+pill+'</span>'+
-        '<span class="tc-time">'+(err?esc(err.slice(0,10)):'')+' '+rt+'</span>'+
+        '<span class="tc-time">'+(err?esc(err.slice(0,14)):'')+' '+rt+'</span>'+
       '</div>'+
       '<div class="tc-bar"><div class="tc-bar-fill" style="width:'+bw+'%"></div></div>'+
       '</div>';
@@ -732,6 +733,25 @@ function renderTasks(){
   grid.innerHTML=html;
   empty.style.display=html?'none':'block';
   empty.textContent=_filt==='all'?'No tasks yet.':'No tasks match.';
+}
+
+function showFailDetail(tid){
+  var prog=S.prog; if(!prog)return;
+  var r=(prog.results||{})[tid]; if(!r)return;
+  var desc=(prog.descriptions||{})[tid]||tid;
+  var m=document.getElementById('fail-detail-modal');
+  document.getElementById('fd-title').textContent=tid;
+  document.getElementById('fd-desc').textContent=desc;
+  document.getElementById('fd-error').textContent=r.error_type||'unknown';
+  document.getElementById('fd-runtime').textContent=(r.runtime||0).toFixed(2)+'s';
+  document.getElementById('fd-agents').textContent=(r.agents_used||[]).join(' → ')||'—';
+  var af=r.agent_failures||{};
+  document.getElementById('fd-agent-fails').textContent=
+    Object.keys(af).length?Object.entries(af).map(function(e){return e[0]+': '+e[1];}).join('\n'):'—';
+  document.getElementById('fd-stderr').textContent=(r.stderr||'').trim()||'(none)';
+  document.getElementById('fd-stdout').textContent=(r.stdout||'').trim()||'(none)';
+  document.getElementById('fd-code').textContent=(r.code_snippet||'').trim()||'(not captured yet — run in progress)';
+  m.style.display='flex';
 }
 
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -777,5 +797,55 @@ async function restartEvo(){
 tick();
 setInterval(tick,3000);
 </script>
+
+<!-- ── FAILURE DETAIL MODAL ───────────────────────────────────── -->
+<style>
+#fail-detail-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;
+  align-items:center;justify-content:center;padding:1rem}
+.fdm{background:#0f1117;border:1px solid rgba(239,68,68,.3);border-radius:12px;
+  width:100%;max-width:780px;max-height:90vh;overflow-y:auto;padding:1.5rem;position:relative}
+.fdm-close{position:absolute;top:.8rem;right:1rem;background:none;border:none;
+  color:#9ca3af;font-size:1.4rem;cursor:pointer;line-height:1}
+.fdm-close:hover{color:#ef4444}
+.fdm h2{margin:0 0 .3rem;font-size:1rem;color:#ef4444}
+.fdm-sub{font-size:.75rem;color:#6b7280;margin-bottom:1rem;word-break:break-all}
+.fdm-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem .8rem;margin-bottom:1rem}
+.fdm-kv{font-size:.75rem}.fdm-k{color:#6b7280;margin-bottom:.1rem}
+.fdm-v{color:#e2e8f0;font-weight:600}
+.fdm-section{margin-bottom:1rem}
+.fdm-section-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;
+  color:#6b7280;margin-bottom:.3rem}
+.fdm-pre{background:#0a0c10;border:1px solid #1e2433;border-radius:6px;
+  padding:.6rem .8rem;font-family:monospace;font-size:.72rem;color:#e2e8f0;
+  white-space:pre-wrap;word-break:break-all;max-height:180px;overflow-y:auto;margin:0}
+.fdm-pre.stderr{border-color:rgba(239,68,68,.2);color:#fca5a5}
+.fdm-pre.code{color:#a5f3fc;max-height:220px}
+</style>
+
+<div id="fail-detail-modal" onclick="if(event.target===this)this.style.display='none'">
+  <div class="fdm">
+    <button class="fdm-close" onclick="document.getElementById('fail-detail-modal').style.display='none'">✕</button>
+    <h2>❌ Task Failure — <span id="fd-title"></span></h2>
+    <div class="fdm-sub" id="fd-desc"></div>
+    <div class="fdm-grid">
+      <div class="fdm-kv"><div class="fdm-k">Error type</div><div class="fdm-v" id="fd-error" style="color:#ef4444"></div></div>
+      <div class="fdm-kv"><div class="fdm-k">Runtime</div><div class="fdm-v" id="fd-runtime"></div></div>
+      <div class="fdm-kv"><div class="fdm-k">Agents run</div><div class="fdm-v" id="fd-agents" style="font-size:.7rem"></div></div>
+      <div class="fdm-kv"><div class="fdm-k">Agent failures</div><div class="fdm-v" id="fd-agent-fails" style="font-size:.68rem;white-space:pre"></div></div>
+    </div>
+    <div class="fdm-section">
+      <div class="fdm-section-label">🔴 Error / stderr</div>
+      <pre class="fdm-pre stderr" id="fd-stderr"></pre>
+    </div>
+    <div class="fdm-section">
+      <div class="fdm-section-label">📤 stdout</div>
+      <pre class="fdm-pre" id="fd-stdout"></pre>
+    </div>
+    <div class="fdm-section">
+      <div class="fdm-section-label">💻 Generated code (first 800 chars)</div>
+      <pre class="fdm-pre code" id="fd-code"></pre>
+    </div>
+  </div>
+</div>
 </body>
 </html>
