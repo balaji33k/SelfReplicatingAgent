@@ -291,12 +291,23 @@ class LLMClient:
                             )
                             time.sleep(retry_sec + 5)
                         elif retry_sec <= _MAX_TPM_SLEEP_SEC:
-                            sleep_time = retry_sec + 5
+                            # TPM rate limit — switch to next model immediately instead
+                            # of sleeping. After all models tried, smart recovery sleep
+                            # waits only until the nearest retry_after window clears
+                            # (typically 60-120s), far better than sleeping per-model.
+                            recover_at = (
+                                datetime.datetime.utcnow()
+                                + datetime.timedelta(seconds=retry_sec)
+                            ).isoformat() + "Z"
+                            self._exhausted_models.add(current_model)
+                            self._retry_after[current_model] = recover_at
+                            self._flush_model_status()
                             logger.warning(
-                                f"[llm_client] TPM limit on {current_model} — "
-                                f"sleeping {sleep_time:.0f}s"
+                                f"[llm_client] TPM limit on {current_model} "
+                                f"(retry in {retry_sec:.0f}s) — switching to next model"
                             )
-                            time.sleep(sleep_time)
+                            if not self._switch_to_next_model():
+                                break
                         else:
                             # TPD exhausted — mark and switch
                             self._exhausted_models.add(current_model)
