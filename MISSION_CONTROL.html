@@ -1,519 +1,643 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Self-Replicating Agent — Mission Control</title>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{background:#0a0b14;color:#e2e8f0;font-family:system-ui,-apple-system,sans-serif;
-      min-height:100vh;padding:20px}
-    h2{font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;color:#475569;margin-bottom:12px}
-    .wrap{max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Self-Replicating Agent — Mission Control</title>
+<style>
+:root{
+  --bg:#04050e;--surface:#0b0d1a;--surface2:#0f1120;
+  --cyan:#00f3ff;--magenta:#d946ef;--lime:#22d45a;
+  --amber:#f59e0b;--red:#ef4444;--dim:#374151;
+  --text:#e2e8f0;--muted:#4b5563;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;
+  min-height:100vh;overflow-x:hidden}
 
-    /* ── TOP HEADER ── */
-    .header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
-      padding:16px 20px;background:#111827;border-radius:12px;
-      border:1px solid #1e293b}
-    .brand{font-size:1rem;font-weight:700;color:#38bdf8;letter-spacing:.05em}
-    .brand span{color:#a78bfa}
-    .header-links{display:flex;gap:8px}
-    .link-btn{padding:6px 14px;border-radius:7px;font-size:.72rem;font-weight:600;
-      text-decoration:none;border:1px solid #334155;color:#94a3b8;background:transparent;cursor:pointer}
-    .link-btn:hover{border-color:#38bdf8;color:#38bdf8}
+/* ── GRID BG ── */
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(0,243,255,.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,243,255,.03) 1px,transparent 1px);
+  background-size:40px 40px}
 
-    /* ── STATUS CARD ── */
-    .status-card{padding:20px 24px;border-radius:12px;border:1px solid #1e293b;
-      background:#111827;display:flex;flex-direction:column;gap:14px}
-    .status-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-    .status-badge{display:inline-flex;align-items:center;gap:7px;
-      padding:6px 14px;border-radius:20px;font-size:.75rem;font-weight:700;letter-spacing:.05em}
-    .badge-running{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#4ade80}
-    .badge-stopped{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#f87171}
-    .badge-analysing{background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:#c084fc}
-    .badge-spawning{background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);color:#fbbf24}
-    .badge-waiting{background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);color:#818cf8}
-    .badge-done{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);color:#4ade80}
-    .badge-default{background:rgba(100,116,139,.1);border:1px solid rgba(100,116,139,.3);color:#64748b}
-    .dot{width:7px;height:7px;border-radius:50%;background:currentColor;animation:pulse 1.4s infinite}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-    .status-gen{font-size:1.6rem;font-weight:800;color:#e2e8f0}
-    .status-progress{font-size:1rem;color:#94a3b8}
-    .status-task{font-size:.75rem;color:#64748b;font-family:monospace;margin-top:4px;
-      overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.page{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:20px;
+  display:flex;flex-direction:column;gap:16px}
 
-    /* ── WAIT ALERT ── */
-    .wait-alert{background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.25);
-      border-radius:9px;padding:12px 16px;font-size:.78rem;color:#fbbf24;
-      display:none;align-items:flex-start;gap:10px}
-    .wait-alert.show{display:flex}
-    .wait-alert strong{display:block;margin-bottom:3px;font-size:.82rem}
-    .wait-alert .models-list{color:#94a3b8;font-size:.7rem;margin-top:4px;font-family:monospace}
+/* ── TOP BAR ── */
+.topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+  padding:12px 20px;background:rgba(11,13,26,.9);border:1px solid rgba(0,243,255,.1);
+  border-radius:12px;backdrop-filter:blur(8px)}
+.brand{font-size:.95rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.brand .c{color:var(--cyan)}.brand .m{color:var(--magenta)}
+.live-pill{display:flex;align-items:center;gap:6px;font-size:.65rem;color:var(--muted);
+  letter-spacing:.08em;text-transform:uppercase}
+.pulse-dot{width:6px;height:6px;border-radius:50%;background:var(--lime);
+  box-shadow:0 0 8px var(--lime);animation:blink 1.4s ease infinite}
+@keyframes blink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+.topbar-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tlink{padding:5px 13px;border-radius:7px;font-size:.7rem;font-weight:600;
+  border:1px solid var(--dim);color:var(--muted);text-decoration:none;background:transparent;cursor:pointer;transition:.15s}
+.tlink:hover{border-color:var(--cyan);color:var(--cyan)}
 
-    /* ── PROGRESS BAR ── */
-    .progress-section{display:flex;flex-direction:column;gap:6px}
-    .progress-meta{display:flex;justify-content:space-between;font-size:.72rem;color:#64748b}
-    .bar-track{height:10px;background:#1e293b;border-radius:6px;overflow:hidden}
-    .bar-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#38bdf8,#a78bfa);
-      transition:width .6s ease;min-width:2px}
-    .stats-row{display:flex;gap:20px;font-size:.75rem;color:#94a3b8}
-    .stat-pass{color:#4ade80;font-weight:700}
-    .stat-fail{color:#f87171;font-weight:700}
+/* ── HERO ROW ── */
+.hero{display:grid;grid-template-columns:auto 1fr auto;gap:20px;align-items:center;
+  padding:24px 28px;background:rgba(11,13,26,.9);border-radius:16px;
+  border:1px solid rgba(0,243,255,.12);
+  box-shadow:0 0 40px rgba(0,243,255,.04)}
 
-    /* ── RATE LIMIT STATUS ── */
-    .model-card{padding:16px 20px;border-radius:12px;border:1px solid #1e293b;background:#111827}
-    .model-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
-    .model-name{font-size:.85rem;font-weight:700;color:#38bdf8;font-family:monospace}
-    .model-tag{font-size:.65rem;padding:2px 8px;border-radius:4px;background:#1e293b;
-      color:#64748b;text-transform:uppercase;letter-spacing:.05em}
-    .rate-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-    .chip{padding:4px 10px;border-radius:6px;font-size:.65rem;font-family:monospace;
-      border:1px solid transparent;white-space:nowrap}
-    .chip-ok{background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.25);color:#4ade80}
-    .chip-warn{background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.25);color:#fbbf24}
-    .chip-dead{background:rgba(239,68,68,.07);border-color:rgba(239,68,68,.2);color:#f87171}
+/* big ring */
+.ring-wrap{position:relative;width:120px;height:120px;flex-shrink:0}
+.ring-wrap svg{transform:rotate(-90deg)}
+.ring-bg{fill:none;stroke:rgba(255,255,255,.05);stroke-width:9}
+.ring-fill{fill:none;stroke-width:9;stroke-linecap:round;
+  stroke-dasharray:308;stroke-dashoffset:308;
+  stroke:url(#rg);transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1)}
+.ring-center{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center}
+.ring-pct{font-size:1.5rem;font-weight:800;color:var(--cyan);line-height:1}
+.ring-lbl{font-size:.5rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:2px}
 
-    /* ── CONTROLS ── */
-    .controls{padding:16px 20px;border-radius:12px;border:1px solid #1e293b;background:#111827}
-    .controls-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .model-select{flex:1;min-width:200px;background:#0a0b14;border:1px solid #334155;
-      color:#e2e8f0;border-radius:8px;padding:8px 12px;font-size:.78rem;
-      font-family:inherit;outline:none;cursor:pointer}
-    .model-select:focus{border-color:#38bdf8}
-    .btn{padding:8px 18px;border-radius:8px;font-size:.78rem;font-weight:600;
-      font-family:inherit;cursor:pointer;border:1px solid transparent;transition:.15s}
-    .btn-apply{background:rgba(56,189,248,.1);border-color:rgba(56,189,248,.4);color:#38bdf8}
-    .btn-apply:hover{background:rgba(56,189,248,.2)}
-    .btn-stop{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.35);color:#f87171}
-    .btn-stop:hover{background:rgba(239,68,68,.18)}
-    .btn-restart{background:rgba(167,139,250,.08);border-color:rgba(167,139,250,.35);color:#a78bfa}
-    .btn-restart:hover{background:rgba(167,139,250,.18)}
-    .btn:disabled{opacity:.4;cursor:not-allowed}
-    .ctrl-msg{font-size:.72rem;color:#64748b;margin-top:8px;min-height:16px;transition:color .2s}
+/* gen info */
+.hero-mid{min-width:0}
+.gen-label{font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.gen-num{font-size:3.2rem;font-weight:800;line-height:1;
+  background:linear-gradient(135deg,var(--cyan),var(--magenta));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 20px rgba(0,243,255,.3))}
+.gen-status{margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sbadge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;
+  border-radius:20px;font-size:.72rem;font-weight:700;letter-spacing:.04em;border:1px solid}
+.sb-run{background:rgba(34,212,90,.1);border-color:rgba(34,212,90,.3);color:var(--lime)}
+.sb-stop{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:var(--red)}
+.sb-analyse{background:rgba(217,70,239,.1);border-color:rgba(217,70,239,.3);color:var(--magenta)}
+.sb-wait{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.3);color:var(--amber)}
+.sb-spawn{background:rgba(0,243,255,.08);border-color:rgba(0,243,255,.25);color:var(--cyan)}
+.sb-default{background:rgba(75,85,99,.1);border-color:rgba(75,85,99,.3);color:var(--muted)}
+.sdot{width:7px;height:7px;border-radius:50%;background:currentColor;animation:blink 1.4s infinite}
+.active-task{margin-top:8px;font-size:.72rem;color:var(--muted);font-family:monospace;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-    /* ── TASK TABLE ── */
-    .task-card{padding:16px 20px;border-radius:12px;border:1px solid #1e293b;background:#111827}
-    .task-filters{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
-    .filter{padding:3px 10px;border-radius:5px;font-size:.65rem;cursor:pointer;
-      border:1px solid #334155;color:#64748b;background:transparent}
-    .filter.active,.filter:hover{border-color:#38bdf8;color:#38bdf8;background:rgba(56,189,248,.07)}
-    table{width:100%;border-collapse:collapse;font-size:.74rem}
-    th{text-align:left;padding:6px 10px;color:#475569;font-size:.6rem;
-      letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid #1e293b}
-    td{padding:7px 10px;border-bottom:1px solid #0f172a;color:#94a3b8;font-family:monospace}
-    tr:hover td{background:rgba(255,255,255,.02)}
-    .t-pass td:first-child{border-left:2px solid #4ade80}
-    .t-fail td:first-child{border-left:2px solid #f87171}
-    .t-active td:first-child{border-left:2px solid #fbbf24}
-    .t-pending td:first-child{border-left:2px solid #334155}
-    .pill{display:inline-block;padding:2px 7px;border-radius:4px;font-size:.62rem}
-    .pill-pass{background:rgba(34,197,94,.1);color:#4ade80}
-    .pill-fail{background:rgba(239,68,68,.08);color:#f87171}
-    .pill-run{background:rgba(251,191,36,.1);color:#fbbf24}
-    .pill-wait{background:rgba(100,116,139,.08);color:#475569}
-    .task-id{color:#e2e8f0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .task-desc{color:#64748b;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-      font-family:system-ui,sans-serif;font-size:.7rem}
+/* stats */
+.hero-stats{display:flex;flex-direction:column;gap:12px;align-items:flex-end;flex-shrink:0}
+.stat-box{text-align:right}
+.stat-num{font-size:1.8rem;font-weight:800;line-height:1}
+.stat-lbl{font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat-pass .stat-num{color:var(--lime);text-shadow:0 0 15px rgba(34,212,90,.4)}
+.stat-fail .stat-num{color:var(--red);text-shadow:0 0 15px rgba(239,68,68,.3)}
 
-    /* ── FOOTER ── */
-    .footer{text-align:center;font-size:.65rem;color:#334155;padding:4px}
-    .blink{animation:pulse 1.4s infinite}
-  </style>
+/* ── WAIT BANNER ── */
+.wait-banner{display:none;padding:14px 18px;border-radius:10px;
+  background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);
+  gap:12px;align-items:flex-start}
+.wait-banner.show{display:flex}
+.wait-icon{font-size:1.4rem;flex-shrink:0;margin-top:1px}
+.wait-title{font-size:.82rem;font-weight:700;color:var(--amber);margin-bottom:5px}
+.wait-detail{font-size:.73rem;color:var(--muted)}
+.wait-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.wchip{padding:3px 10px;border-radius:5px;font-size:.65rem;font-family:monospace;
+  background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);color:var(--amber)}
+
+/* ── TWO-COL ── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:650px){.two-col{grid-template-columns:1fr}.hero{grid-template-columns:1fr;text-align:center}.hero-stats{align-items:center}}
+
+/* ── CARDS ── */
+.card{background:rgba(11,13,26,.9);border:1px solid rgba(255,255,255,.06);
+  border-radius:12px;padding:18px 20px}
+.card-title{font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:14px}
+
+/* ── LIVE FEED ── */
+.feed{height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;
+  scrollbar-width:thin;scrollbar-color:var(--dim) transparent}
+.feed::-webkit-scrollbar{width:4px}
+.feed::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
+.feed-line{font-size:.7rem;font-family:monospace;color:var(--muted);
+  padding:3px 0;border-bottom:1px solid rgba(255,255,255,.02);
+  display:flex;gap:8px;align-items:baseline;flex-shrink:0}
+.feed-time{color:#1e293b;flex-shrink:0;font-size:.62rem}
+.feed-pass{color:var(--lime)}.feed-fail{color:var(--red)}
+.feed-info{color:var(--cyan)}.feed-warn{color:var(--amber)}
+.feed-dim{color:#374151}
+
+/* ── MODEL CHIPS ── */
+.model-chips{display:flex;gap:8px;flex-wrap:wrap}
+.mchip{padding:6px 12px;border-radius:8px;font-size:.68rem;font-family:monospace;
+  border:1px solid;display:flex;flex-direction:column;gap:2px;cursor:default}
+.mchip-name{font-weight:700}
+.mchip-sub{font-size:.57rem;opacity:.7}
+.mc-ok{background:rgba(34,212,90,.07);border-color:rgba(34,212,90,.25);color:var(--lime)}
+.mc-warn{background:rgba(245,158,11,.07);border-color:rgba(245,158,11,.25);color:var(--amber)}
+.mc-dead{background:rgba(239,68,68,.06);border-color:rgba(239,68,68,.18);color:#6b7280}
+
+/* ── TASK GRID ── */
+.task-filters{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.tf{padding:4px 12px;border-radius:6px;font-size:.65rem;font-weight:600;
+  border:1px solid var(--dim);color:var(--muted);cursor:pointer;transition:.15s}
+.tf.on,.tf:hover{border-color:var(--cyan);color:var(--cyan);background:rgba(0,243,255,.07)}
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.tcard{padding:10px 12px;border-radius:8px;border:1px solid;cursor:default;transition:.15s}
+.tcard:hover{transform:translateY(-1px)}
+.tc-pass{background:rgba(34,212,90,.05);border-color:rgba(34,212,90,.2)}
+.tc-fail{background:rgba(239,68,68,.04);border-color:rgba(239,68,68,.15)}
+.tc-run{background:rgba(245,158,11,.06);border-color:rgba(245,158,11,.3);
+  box-shadow:0 0 12px rgba(245,158,11,.1)}
+.tc-pend{background:rgba(255,255,255,.02);border-color:rgba(255,255,255,.05)}
+.tc-id{font-size:.65rem;font-family:monospace;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;margin-bottom:5px}
+.tc-pass .tc-id{color:var(--lime)}.tc-fail .tc-id{color:#6b7280}
+.tc-run .tc-id{color:var(--amber)}.tc-pend .tc-id{color:#374151}
+.tc-meta{display:flex;justify-content:space-between;align-items:center}
+.tc-pill{font-size:.58rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.tc-pass .tc-pill{color:var(--lime)}.tc-fail .tc-pill{color:var(--red)}
+.tc-run .tc-pill{color:var(--amber);animation:blink 1s infinite}
+.tc-pend .tc-pill{color:#1e293b}
+.tc-time{font-size:.6rem;font-family:monospace;color:var(--muted)}
+
+/* ── CONTROLS ── */
+.ctrl-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.msel{flex:1;min-width:190px;background:var(--bg);border:1px solid var(--dim);
+  color:var(--text);border-radius:8px;padding:8px 12px;font-size:.76rem;
+  font-family:inherit;outline:none;cursor:pointer}
+.msel:focus{border-color:var(--cyan)}
+.btn{padding:8px 18px;border-radius:8px;font-size:.76rem;font-weight:700;
+  font-family:inherit;cursor:pointer;border:1px solid;transition:.15s}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.ba{background:rgba(0,243,255,.08);border-color:rgba(0,243,255,.35);color:var(--cyan)}
+.ba:hover:not(:disabled){background:rgba(0,243,255,.18)}
+.bs{background:rgba(239,68,68,.07);border-color:rgba(239,68,68,.3);color:var(--red)}
+.bs:hover:not(:disabled){background:rgba(239,68,68,.16)}
+.br{background:rgba(217,70,239,.07);border-color:rgba(217,70,239,.3);color:var(--magenta)}
+.br:hover:not(:disabled){background:rgba(217,70,239,.16)}
+.cmsg{font-size:.7rem;margin-top:8px;min-height:16px;transition:color .2s;color:var(--muted)}
+
+/* ── GEN HISTORY ── */
+.gen-history{display:flex;gap:10px;align-items:flex-end;height:60px}
+.gen-bar-wrap{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
+.gen-bar{width:100%;border-radius:4px 4px 0 0;background:linear-gradient(180deg,var(--cyan),var(--magenta));
+  min-height:4px;transition:height .6s ease;opacity:.7}
+.gen-bar.current{opacity:1;box-shadow:0 -4px 12px rgba(0,243,255,.3)}
+.gen-bar-lbl{font-size:.58rem;color:var(--muted);text-align:center}
+
+footer{text-align:center;font-size:.62rem;color:#1e293b;padding:4px 0 8px}
+</style>
 </head>
 <body>
-<div class="wrap">
+<div class="page">
 
-  <!-- HEADER -->
-  <div class="header">
-    <div class="brand">Self-Replicating <span>Agent</span></div>
-    <div class="header-links">
-      <a href="/code" class="link-btn">📂 Code Browser</a>
-    </div>
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="brand"><span class="c">SELF</span><span class="m">·</span><span class="c">REPLICATING</span> <span style="color:#e2e8f0">AGENT</span></div>
+  <div class="live-pill"><span class="pulse-dot"></span>LIVE</div>
+  <div class="topbar-right">
+    <a href="/code" class="tlink">📂 Code Browser</a>
   </div>
-
-  <!-- STATUS CARD -->
-  <div class="status-card">
-    <div class="status-row">
-      <span id="status-badge" class="status-badge badge-default"><span class="dot"></span>LOADING</span>
-      <div>
-        <div style="display:flex;align-items:baseline;gap:10px">
-          <span id="gen-num" class="status-gen">Gen 1</span>
-          <span id="progress-text" class="status-progress">0 / 20</span>
-        </div>
-        <div id="task-label" class="status-task">–</div>
-      </div>
-    </div>
-
-    <!-- Rate-limit wait alert -->
-    <div class="wait-alert" id="wait-alert">
-      <span style="font-size:1.2rem;flex-shrink:0">⏳</span>
-      <div>
-        <strong>Waiting for API rate limits to clear</strong>
-        <div id="wait-detail">All LLM models are temporarily exhausted. Evolution resumes automatically.</div>
-        <div id="wait-models" class="models-list"></div>
-      </div>
-    </div>
-
-    <!-- Progress bar -->
-    <div class="progress-section">
-      <div class="bar-track"><div class="bar-fill" id="bar-fill" style="width:0%"></div></div>
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div class="stats-row">
-          <span>✅ <span class="stat-pass" id="pass-count">0</span> passed</span>
-          <span>❌ <span class="stat-fail" id="fail-count">0</span> failed</span>
-          <span id="pass-rate" style="color:#64748b"></span>
-        </div>
-        <div class="progress-meta" id="last-updated"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODEL STATUS -->
-  <div class="model-card">
-    <h2>LLM Models</h2>
-    <div class="model-row">
-      <span class="model-name" id="active-model">–</span>
-      <span class="model-tag" id="active-provider">–</span>
-    </div>
-    <div class="rate-chips" id="model-chips"></div>
-  </div>
-
-  <!-- CONTROLS -->
-  <div class="controls">
-    <h2>Controls</h2>
-    <div class="controls-row">
-      <select id="model-select" class="model-select">
-        <option value="">— select model —</option>
-        <optgroup label="GEMINI (Google Free Tier)">
-          <option value="gemini-2.0-flash">Gemini 2.0 Flash — 1500 req/day</option>
-          <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite — 1500 req/day</option>
-        </optgroup>
-        <optgroup label="GROQ (Free Tier)">
-          <option value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B — 500k TPD</option>
-          <option value="llama-3.1-8b-instant">Llama 3.1 8B Instant — 500k TPD</option>
-          <option value="llama-3.3-70b-versatile">Llama 3.3 70B Versatile — 100k TPD</option>
-        </optgroup>
-      </select>
-      <button class="btn btn-apply" id="btn-apply" onclick="applyModel()">💾 Apply</button>
-      <button class="btn btn-stop"  id="btn-stop"  onclick="stopEvolution()">⏹ Stop</button>
-      <button class="btn btn-restart" id="btn-restart" onclick="restartEvolution()">🔄 Start Fresh</button>
-    </div>
-    <div class="ctrl-msg" id="ctrl-msg"></div>
-  </div>
-
-  <!-- TASK TABLE -->
-  <div class="task-card">
-    <h2>Tasks — Generation <span id="tasks-gen">1</span></h2>
-    <div class="task-filters">
-      <span class="filter active" data-f="all" onclick="setFilter('all')">All</span>
-      <span class="filter" data-f="pass" onclick="setFilter('pass')">✅ Passed</span>
-      <span class="filter" data-f="fail" onclick="setFilter('fail')">❌ Failed</span>
-      <span class="filter" data-f="pending" onclick="setFilter('pending')">⏳ Pending</span>
-    </div>
-    <table>
-      <thead><tr>
-        <th>Task ID</th>
-        <th>Description</th>
-        <th>Status</th>
-        <th>Error</th>
-        <th>Time</th>
-      </tr></thead>
-      <tbody id="task-tbody"></tbody>
-    </table>
-    <div id="task-empty" style="padding:20px;text-align:center;color:#334155;font-size:.75rem">
-      Loading task list…
-    </div>
-  </div>
-
-  <div class="footer">Auto-refreshes every 3s &nbsp;·&nbsp; <span class="blink" id="live-dot">●</span> live</div>
 </div>
 
-<script>
-var STATE = {hb: null, ms: null, prog: null, ri: null};
-var _filter = 'all';
+<!-- HERO -->
+<div class="hero">
+  <!-- ring -->
+  <div class="ring-wrap">
+    <svg width="120" height="120" viewBox="0 0 120 120">
+      <defs>
+        <linearGradient id="rg" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#00f3ff"/>
+          <stop offset="100%" stop-color="#d946ef"/>
+        </linearGradient>
+      </defs>
+      <circle class="ring-bg" cx="60" cy="60" r="49"/>
+      <circle class="ring-fill" id="ring-fill" cx="60" cy="60" r="49"/>
+    </svg>
+    <div class="ring-center">
+      <div class="ring-pct" id="ring-pct">0%</div>
+      <div class="ring-lbl">done</div>
+    </div>
+  </div>
 
-/* ── Fetch helpers ── */
-async function loadJSON(url) {
-  try {
-    var r = await fetch(url + '?_=' + Date.now());
-    if (!r.ok) return null;
-    return await r.json();
-  } catch(e) { return null; }
+  <!-- gen + status -->
+  <div class="hero-mid">
+    <div class="gen-label">Active Generation</div>
+    <div class="gen-num" id="gen-num">Gen 1</div>
+    <div class="gen-status">
+      <span class="sbadge sb-default" id="status-badge"><span class="sdot"></span>LOADING</span>
+      <span style="font-size:.75rem;color:#374151" id="progress-text">0 / 20</span>
+    </div>
+    <div class="active-task" id="active-task">—</div>
+  </div>
+
+  <!-- stats -->
+  <div class="hero-stats">
+    <div class="stat-box stat-pass">
+      <div class="stat-num" id="pass-num">0</div>
+      <div class="stat-lbl">Passed</div>
+    </div>
+    <div class="stat-box stat-fail">
+      <div class="stat-num" id="fail-num">0</div>
+      <div class="stat-lbl">Failed</div>
+    </div>
+  </div>
+</div>
+
+<!-- WAIT BANNER -->
+<div class="wait-banner" id="wait-banner">
+  <div class="wait-icon">⏳</div>
+  <div>
+    <div class="wait-title">Waiting for API rate limits to clear</div>
+    <div class="wait-detail" id="wait-detail">All LLM models temporarily exhausted — evolution resumes automatically.</div>
+    <div class="wait-chips" id="wait-chips"></div>
+  </div>
+</div>
+
+<!-- LIVE FEED + MODEL STATUS -->
+<div class="two-col">
+  <div class="card">
+    <div class="card-title">⚡ Live Activity Feed</div>
+    <div class="feed" id="feed">
+      <div class="feed-line"><span class="feed-time">--:--:--</span><span class="feed-dim">Connecting to mission control…</span></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">🤖 LLM Model Status</div>
+    <div class="model-chips" id="model-chips"></div>
+    <div style="margin-top:16px" id="gen-history-wrap">
+      <div class="card-title" style="margin-bottom:8px">📈 Generation Pass Rates</div>
+      <div class="gen-history" id="gen-history"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TASK GRID -->
+<div class="card">
+  <div class="card-title">📋 Tasks — Generation <span id="tasks-gen-num">1</span></div>
+  <div class="task-filters">
+    <span class="tf on" data-f="all"  onclick="setFilter('all')">All</span>
+    <span class="tf"    data-f="pass" onclick="setFilter('pass')">✅ Passed</span>
+    <span class="tf"    data-f="fail" onclick="setFilter('fail')">❌ Failed</span>
+    <span class="tf"    data-f="run"  onclick="setFilter('run')">▶ Running</span>
+    <span class="tf"    data-f="pend" onclick="setFilter('pend')">⏳ Pending</span>
+  </div>
+  <div class="tgrid" id="tgrid"></div>
+  <div id="tgrid-empty" style="padding:24px;text-align:center;color:#1e293b;font-size:.75rem">Loading…</div>
+</div>
+
+<!-- CONTROLS -->
+<div class="card">
+  <div class="card-title">🎛 Controls</div>
+  <div class="ctrl-row">
+    <select id="msel" class="msel">
+      <option value="">— select model —</option>
+      <optgroup label="GEMINI (Google Free Tier)">
+        <option value="gemini-2.0-flash">Gemini 2.0 Flash — 1500 req/day · 15 rpm</option>
+        <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite — 1500 req/day · 30 rpm</option>
+      </optgroup>
+      <optgroup label="GROQ (Free Tier)">
+        <option value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B — 500k TPD</option>
+        <option value="llama-3.1-8b-instant">Llama 3.1 8B Instant — 500k TPD</option>
+        <option value="llama-3.3-70b-versatile">Llama 3.3 70B Versatile — 100k TPD</option>
+      </optgroup>
+    </select>
+    <button class="btn ba" id="btn-apply"   onclick="applyModel()">💾 Apply Model</button>
+    <button class="btn bs" id="btn-stop"    onclick="stopEvo()">⏹ Stop</button>
+    <button class="btn br" id="btn-restart" onclick="restartEvo()">🔄 Start Fresh</button>
+  </div>
+  <div class="cmsg" id="cmsg"></div>
+</div>
+
+<footer>Self-Replicating Agent · Mission Control · auto-refresh every 3s</footer>
+</div><!-- /page -->
+
+<script>
+var S = {hb:null, ms:null, prog:null, ri:null, evo:null};
+var _filter = 'all';
+var _feed = [];
+var _lastTask = '';
+var _lastStatus = '';
+var _lastProg = '';
+var _lastModel = '';
+
+/* ── DATA ── */
+async function get(url){
+  try{ var r=await fetch(url+'?_='+Date.now()); return r.ok?await r.json():null; }
+  catch(e){ return null; }
 }
 
-async function refresh() {
-  var [hb, ms, prog, ri] = await Promise.all([
-    loadJSON('data/heartbeat.json'),
-    loadJSON('data/model_status.json'),
-    loadJSON('data/gen_1_progress.json'),
-    loadJSON('data/run_info.json'),
+async function tick(){
+  var [hb,ms,prog,ri,evo] = await Promise.all([
+    get('data/heartbeat.json'), get('data/model_status.json'),
+    get('data/gen_1_progress.json'), get('data/run_info.json'),
+    get('data/evolution_log.json'),
   ]);
-  if (hb)   STATE.hb   = hb;
-  if (ms)   STATE.ms   = ms;
-  if (prog) STATE.prog = prog;
-  if (ri)   STATE.ri   = ri;
+  if(hb)  S.hb=hb;
+  if(ms)  S.ms=ms;
+  if(prog)S.prog=prog;
+  if(ri)  S.ri=ri;
+  if(evo) S.evo=evo;
 
-  renderStatus();
+  detectFeedEvents();
+  renderHero();
+  renderWait();
   renderModels();
   renderTasks();
-  renderWaitAlert();
-  document.getElementById('live-dot').style.opacity = Math.random() > .5 ? '1' : '.4';
+  renderGenHistory();
 }
 
-/* ── STATUS ── */
-function renderStatus() {
-  var hb = STATE.hb;
-  if (!hb) return;
+/* ── FEED EVENTS ── */
+function feedLog(msg, cls){
+  var now=new Date();
+  var t=now.toTimeString().slice(0,8);
+  _feed.push({t,msg,cls:cls||'feed-dim'});
+  if(_feed.length>120)_feed.shift();
+  var el=document.getElementById('feed');
+  var div=document.createElement('div');
+  div.className='feed-line';
+  div.innerHTML='<span class="feed-time">'+t+'</span><span class="'+( cls||'feed-dim')+'">'+esc(msg)+'</span>';
+  el.appendChild(div);
+  el.scrollTop=el.scrollHeight;
+}
 
-  var status = hb.status || '';
-  var badge = document.getElementById('status-badge');
-  var classMap = {
-    RUNNING: 'badge-running', ANALYSING: 'badge-analysing',
-    SPAWNING: 'badge-spawning', DONE: 'badge-done',
-    STOPPED: 'badge-stopped', WAITING: 'badge-waiting',
-    SPAWN_FAILED: 'badge-stopped'
-  };
-  badge.className = 'status-badge ' + (classMap[status] || 'badge-default');
-  badge.innerHTML = '<span class="dot"></span>' + status;
+function detectFeedEvents(){
+  var hb=S.hb; var ms=S.ms;
+  if(!hb) return;
+  var status=hb.status||'';
+  var prog=hb.progress||'';
+  var task=hb.active_task_id||'';
+  var model=ms?ms.active:'';
 
-  // Override badge for run_info stopped state
-  var ri = STATE.ri;
-  if (ri && ri.status === 'stopped') {
-    badge.className = 'status-badge badge-stopped';
-    badge.innerHTML = '⏹ STOPPED';
-  } else if (ri && ri.status === 'waiting') {
-    badge.className = 'status-badge badge-waiting';
-    badge.innerHTML = '⏳ WAITING — auto-restart soon';
+  if(status!==_lastStatus){
+    if(status==='RUNNING')   feedLog('▶ Evolution RUNNING — Gen '+(hb.active_gen||1),'feed-info');
+    if(status==='ANALYSING') feedLog('🧬 ANALYSING — generating Gen '+((hb.active_gen||1)+1)+' code via LLM…','feed-info');
+    if(status==='SPAWNING')  feedLog('🚀 SPAWNING Gen '+((hb.active_gen||1)+1)+'…','feed-info');
+    if(status==='DONE')      feedLog('✅ Generation '+(hb.active_gen||1)+' complete!','feed-pass');
+    if(status==='STOPPED')   feedLog('⏹ Evolution STOPPED','feed-warn');
+    if(status==='SPAWN_FAILED') feedLog('❌ Spawn failed — check logs','feed-fail');
+    _lastStatus=status;
   }
 
-  document.getElementById('gen-num').textContent = 'Gen ' + (hb.active_gen || 1);
-  document.getElementById('tasks-gen').textContent = hb.active_gen || 1;
-
-  var done = parseInt((hb.progress || '0/20').split('/')[0]);
-  var total = parseInt((hb.progress || '0/20').split('/')[1]);
-  document.getElementById('progress-text').textContent = done + ' / ' + total;
-  document.getElementById('bar-fill').style.width = (total ? (done/total*100) : 0) + '%';
-  document.getElementById('pass-count').textContent = hb.passed_so_far || 0;
-  document.getElementById('fail-count').textContent = hb.failed_so_far || 0;
-
-  var passRate = hb.pass_rate_so_far || 0;
-  document.getElementById('pass-rate').textContent =
-    done > 0 ? (passRate*100).toFixed(1) + '% pass rate' : '';
-
-  var taskLabel = '';
-  if (hb.active_task_id) {
-    taskLabel = '▶ ' + hb.active_task_id;
-    if (hb.current_phase) taskLabel += '  ·  phase: ' + hb.current_phase;
-  } else if (status === 'ANALYSING') {
-    taskLabel = '⚙ Generating Gen ' + ((hb.active_gen||1)+1) + ' source code via LLM…';
-  } else if (status === 'SPAWNING') {
-    taskLabel = '🚀 Spawning Gen ' + ((hb.active_gen||1)+1) + '…';
+  if(task && task!==_lastTask && _lastTask){
+    // previous task finished — look up result
+    var res=S.prog&&S.prog.results&&S.prog.results[_lastTask];
+    if(res){
+      if(res.status==='pass')
+        feedLog('✅ PASS  '+_lastTask+'  ('+res.runtime.toFixed(1)+'s)','feed-pass');
+      else
+        feedLog('❌ FAIL  '+_lastTask+'  '+res.error_type+'  ('+res.runtime.toFixed(1)+'s)','feed-fail');
+    }
   }
-  document.getElementById('task-label').textContent = taskLabel || '–';
+  if(task && task!==_lastTask){
+    if(task) feedLog('▶ Starting  '+task,'feed-dim');
+    _lastTask=task;
+  }
 
-  // Last updated
-  var lu = hb.last_updated ? new Date(hb.last_updated) : null;
-  if (lu) {
-    var secs = Math.floor((Date.now() - lu.getTime()) / 1000);
-    var txt = secs < 60 ? secs + 's ago' : Math.floor(secs/60) + 'm ' + (secs%60) + 's ago';
-    document.getElementById('last-updated').textContent = 'updated ' + txt;
+  if(model && model!==_lastModel && _lastModel){
+    feedLog('⚡ Model switched → '+model.split('/').pop(),'feed-warn');
+    _lastModel=model;
+  } else if(model && !_lastModel){
+    feedLog('🤖 Using '+model.split('/').pop(),'feed-info');
+    _lastModel=model;
+  }
+
+  // rate-limit alert
+  if(ms && ms.tpd_exhausted && ms.tpd_exhausted.length>0 && _filter!=='ratelimit'){
+    var ra=ms.retry_after||{};
+    var times=Object.entries(ra).map(function(e){
+      return{m:e[0],t:new Date(e[1])};
+    }).filter(function(e){return e.t>Date.now();})
+      .sort(function(a,b){return a.t-b.t;});
+    if(times.length){
+      var nearest=times[0];
+      var s=Math.max(0,Math.floor((nearest.t-Date.now())/1000));
+      var tstr=s<60?s+'s':Math.floor(s/60)+'m '+s%60+'s';
+      // only log once per minute
+      if(!window._lastRLLog||Date.now()-window._lastRLLog>60000){
+        feedLog('⏳ Rate-limited — '+nearest.m.split('/').pop()+' recovers in '+tstr,'feed-warn');
+        window._lastRLLog=Date.now();
+      }
+    }
   }
 }
 
-/* ── WAIT ALERT ── */
-function renderWaitAlert() {
-  var ms = STATE.ms;
-  var alert = document.getElementById('wait-alert');
-  if (!ms || !ms.tpd_exhausted || ms.tpd_exhausted.length === 0) {
-    alert.classList.remove('show'); return;
+/* ── HERO ── */
+function renderHero(){
+  var hb=S.hb; if(!hb) return;
+  var status=hb.status||'';
+  var ri=S.ri;
+
+  // badge
+  var badge=document.getElementById('status-badge');
+  var clsMap={RUNNING:'sb-run',ANALYSING:'sb-analyse',SPAWNING:'sb-spawn',
+              DONE:'sb-run',STOPPED:'sb-stop',WAITING:'sb-wait',SPAWN_FAILED:'sb-stop'};
+  badge.className='sbadge '+(clsMap[status]||'sb-default');
+  var label=status||'–';
+  if(ri&&ri.status==='stopped') label='STOPPED';
+  else if(ri&&ri.status==='waiting') label='WAITING';
+  badge.innerHTML='<span class="sdot"></span>'+label;
+
+  document.getElementById('gen-num').textContent='Gen '+(hb.active_gen||1);
+  document.getElementById('tasks-gen-num').textContent=hb.active_gen||1;
+
+  var parts=(hb.progress||'0/20').split('/');
+  var done=parseInt(parts[0])||0, total=parseInt(parts[1])||20;
+  document.getElementById('progress-text').textContent=done+' / '+total;
+  document.getElementById('pass-num').textContent=hb.passed_so_far||0;
+  document.getElementById('fail-num').textContent=hb.failed_so_far||0;
+
+  // ring
+  var pct=total?done/total:0;
+  var offset=308-(308*pct);
+  document.getElementById('ring-fill').style.strokeDashoffset=offset;
+  document.getElementById('ring-pct').textContent=Math.round(pct*100)+'%';
+
+  // active task
+  var tl='';
+  if(hb.active_task_id){
+    tl='▶ '+hb.active_task_id;
+    if(hb.current_phase) tl+=' · '+hb.current_phase;
+  } else if(status==='ANALYSING'){
+    tl='⚙ Generating Gen '+((hb.active_gen||1)+1)+' code…';
+  } else if(status==='SPAWNING'){
+    tl='🚀 Spawning Gen '+((hb.active_gen||1)+1)+'…';
+  } else if(status==='DONE'){
+    tl='✅ Generation complete!';
+  } else if(ri&&ri.status==='stopped'){
+    tl='⏹ Stopped — click Start Fresh to resume';
   }
+  document.getElementById('active-task').textContent=tl||'—';
+}
 
-  var ra = ms.retry_after || {};
-  var now = Date.now();
-  var times = Object.entries(ra).map(function(e) {
-    return {model: e[0], t: new Date(e[1])};
-  }).filter(function(e){ return e.t > now; })
-    .sort(function(a,b){ return a.t - b.t; });
-
-  if (times.length === 0) { alert.classList.remove('show'); return; }
-
-  alert.classList.add('show');
-  var nearest = times[0];
-  var secsLeft = Math.max(0, Math.floor((nearest.t - now) / 1000));
-  var timeStr = secsLeft < 60 ? secsLeft + 's' : Math.floor(secsLeft/60) + 'm ' + (secsLeft%60) + 's';
-  document.getElementById('wait-detail').textContent =
-    'All models rate-limited. Fastest recovery: ' +
-    nearest.model.split('/').pop() + ' in ' + timeStr + ' — evolution resumes automatically.';
-
-  var lines = times.map(function(e) {
-    var s = Math.max(0, Math.floor((e.t - now)/1000));
-    var t = s < 60 ? s+'s' : Math.floor(s/60)+'m';
-    return e.model.split('/').pop() + ' → ' + t;
-  });
-  document.getElementById('wait-models').textContent = lines.join('   ');
+/* ── WAIT BANNER ── */
+function renderWait(){
+  var ms=S.ms;
+  var banner=document.getElementById('wait-banner');
+  if(!ms||!ms.tpd_exhausted||ms.tpd_exhausted.length===0){banner.classList.remove('show');return;}
+  var ra=ms.retry_after||{};
+  var now=Date.now();
+  var times=Object.entries(ra).map(function(e){return{m:e[0],t:new Date(e[1])};})
+    .filter(function(e){return e.t>now;}).sort(function(a,b){return a.t-b.t;});
+  if(!times.length){banner.classList.remove('show');return;}
+  banner.classList.add('show');
+  var nearest=times[0];
+  var s=Math.max(0,Math.floor((nearest.t-now)/1000));
+  var tstr=s<60?s+'s':Math.floor(s/60)+'m '+(s%60)+'s';
+  document.getElementById('wait-detail').textContent=
+    'Fastest recovery: '+nearest.m.split('/').pop()+' in '+tstr+' — evolution resumes automatically.';
+  document.getElementById('wait-chips').innerHTML=times.map(function(e){
+    var ss=Math.max(0,Math.floor((e.t-now)/1000));
+    var tt=ss<60?ss+'s':Math.floor(ss/60)+'m '+(ss%60)+'s';
+    return '<span class="wchip">'+e.m.split('/').pop()+' → '+tt+'</span>';
+  }).join('');
 }
 
 /* ── MODELS ── */
-function renderModels() {
-  var ms = STATE.ms;
-  if (!ms) return;
-
-  var shortName = (ms.active || '–').split('/').pop();
-  document.getElementById('active-model').textContent = shortName;
-  document.getElementById('active-provider').textContent = ms.provider || '–';
-
-  var all = (ms.all_models || []);
-  var exhausted = ms.tpd_exhausted || [];
-  var ra = ms.retry_after || {};
-  var now = Date.now();
-
-  var html = all.map(function(m) {
-    var short = m.split('/').pop();
-    var isEx = exhausted.indexOf(m) >= 0;
-    var raT = ra[m] ? new Date(ra[m]) : null;
-    var secs = raT ? Math.max(0, Math.floor((raT - now)/1000)) : 0;
-
-    if (!isEx) {
-      return '<span class="chip chip-ok">✓ ' + short + '</span>';
-    } else if (secs > 0) {
-      var t = secs < 60 ? secs+'s' : Math.floor(secs/60)+'m';
-      return '<span class="chip chip-warn">⏳ ' + short + ' ('+t+')</span>';
-    } else {
-      return '<span class="chip chip-dead">✕ ' + short + '</span>';
-    }
+function renderModels(){
+  var ms=S.ms; if(!ms) return;
+  var all=ms.all_models||[];
+  var ex=ms.tpd_exhausted||[];
+  var ra=ms.retry_after||{};
+  var active=ms.active||'';
+  var now=Date.now();
+  var html=all.map(function(m){
+    var short=m.split('/').pop();
+    var isEx=ex.indexOf(m)>=0;
+    var rat=ra[m]?new Date(ra[m]):null;
+    var s=rat?Math.max(0,Math.floor((rat-now)/1000)):0;
+    var tstr=s<60?s+'s':Math.floor(s/60)+'m';
+    var cls='mc-ok'; var sub='✓ available';
+    if(isEx&&s>0){cls='mc-warn';sub='⏳ '+tstr;}
+    else if(isEx){cls='mc-dead';sub='✕ exhausted';}
+    var border=m===active?';outline:1px solid rgba(0,243,255,.4)':'';
+    return '<div class="mchip '+cls+'" style="'+border+'">'+
+      '<span class="mchip-name">'+short+'</span>'+
+      '<span class="mchip-sub">'+sub+'</span>'+
+      '</div>';
   }).join('');
-
-  document.getElementById('model-chips').innerHTML = html;
+  document.getElementById('model-chips').innerHTML=html;
 }
 
-/* ── TASK TABLE ── */
-function setFilter(f) {
-  _filter = f;
-  document.querySelectorAll('.filter').forEach(function(el) {
-    el.classList.toggle('active', el.dataset.f === f);
-  });
+/* ── GEN HISTORY ── */
+function renderGenHistory(){
+  var evo=S.evo;
+  var hb=S.hb;
+  var el=document.getElementById('gen-history');
+  var activeGen=hb?hb.active_gen:1;
+
+  // Build gen pass-rate list from evolution log
+  var gens=[];
+  if(evo&&evo.generations){
+    evo.generations.forEach(function(g){
+      gens.push({gen:g.generation,rate:g.actual_pass_rate||g.pass_rate||0});
+    });
+  }
+  // Always include current gen
+  if(hb){
+    var found=gens.some(function(g){return g.gen===activeGen;});
+    if(!found) gens.push({gen:activeGen,rate:hb.pass_rate_so_far||0});
+  }
+  gens.sort(function(a,b){return a.gen-b.gen;});
+  if(!gens.length){el.innerHTML='<span style="color:#1e293b;font-size:.68rem">No history yet</span>';return;}
+
+  el.innerHTML=gens.map(function(g){
+    var h=Math.max(4,Math.round(g.rate*52));
+    var isCur=g.gen===activeGen;
+    return '<div class="gen-bar-wrap">'+
+      '<div class="gen-bar'+(isCur?' current':'')+'" style="height:'+h+'px" title="Gen '+g.gen+': '+(g.rate*100).toFixed(1)+'%"></div>'+
+      '<div class="gen-bar-lbl">G'+g.gen+'<br>'+(g.rate*100).toFixed(0)+'%</div>'+
+      '</div>';
+  }).join('');
+}
+
+/* ── TASK GRID ── */
+function setFilter(f){
+  _filter=f;
+  document.querySelectorAll('.tf').forEach(function(el){el.classList.toggle('on',el.dataset.f===f);});
   renderTasks();
 }
 
-function renderTasks() {
-  var prog = STATE.prog;
-  var hb = STATE.hb;
-  if (!prog) return;
+function renderTasks(){
+  var prog=S.prog; var hb=S.hb;
+  if(!prog){return;}
+  var list=prog.task_list||[];
+  var res=prog.results||{};
+  var active=hb?hb.active_task_id:'';
+  var cards=list.map(function(tid){
+    var r=res[tid];
+    var isRun=(!r&&tid===active);
+    var cls,pill,status;
+    if(r){
+      status=r.status==='pass'?'pass':'fail';
+      cls='tc-'+(r.status==='pass'?'pass':'fail');
+      pill=r.status==='pass'?'PASS':'FAIL';
+    }else if(isRun){status='run';cls='tc-run';pill='RUNNING';}
+    else{status='pend';cls='tc-pend';pill='–';}
 
-  var taskList = prog.task_list || [];
-  var results = prog.results || {};
-  var descs = prog.descriptions || {};
-  var activeTask = hb ? hb.active_task_id : '';
-
-  var rows = taskList.map(function(tid) {
-    var r = results[tid];
-    var isActive = tid === activeTask && !r;
-    var desc = descs[tid] || '';
-
-    var rowStatus, pill, rowClass;
-    if (r) {
-      rowStatus = r.status === 'pass' ? 'pass' : 'fail';
-      pill = r.status === 'pass'
-        ? '<span class="pill pill-pass">PASS</span>'
-        : '<span class="pill pill-fail">FAIL</span>';
-      rowClass = r.status === 'pass' ? 't-pass' : 't-fail';
-    } else if (isActive) {
-      rowStatus = 'running';
-      pill = '<span class="pill pill-run">RUNNING</span>';
-      rowClass = 't-active';
-    } else {
-      rowStatus = 'pending';
-      pill = '<span class="pill pill-wait">–</span>';
-      rowClass = 't-pending';
-    }
-
-    if (_filter !== 'all') {
-      if (_filter === 'pass' && rowStatus !== 'pass') return '';
-      if (_filter === 'fail' && rowStatus !== 'fail') return '';
-      if (_filter === 'pending' && rowStatus !== 'pending' && rowStatus !== 'running') return '';
-    }
-
-    var err = r ? (r.error_type || '') : (isActive ? (hb.current_phase || '') : '');
-    var rt  = r ? r.runtime.toFixed(1) + 's' : (isActive ? '…' : '');
-
-    return '<tr class="' + rowClass + '">'
-      + '<td class="task-id">' + tid + '</td>'
-      + '<td class="task-desc">' + esc(desc) + '</td>'
-      + '<td>' + pill + '</td>'
-      + '<td style="color:#475569">' + esc(err) + '</td>'
-      + '<td style="color:#334155">' + rt + '</td>'
-      + '</tr>';
-  });
-
-  var html = rows.filter(Boolean).join('');
-  var tbody = document.getElementById('task-tbody');
-  var empty = document.getElementById('task-empty');
-  tbody.innerHTML = html;
-  empty.style.display = html ? 'none' : 'block';
-  if (!html) empty.textContent = _filter === 'all' ? 'No tasks loaded yet.' : 'No tasks match this filter.';
+    if(_filter!=='all'&&_filter!==status) return '';
+    var err=r?(r.error_type||''):(isRun?(hb.current_phase||''):'');
+    var rt=r?r.runtime.toFixed(1)+'s':(isRun?'…':'');
+    var shortId=tid.length>22?tid.slice(-22):tid;
+    return '<div class="tcard '+cls+'">'+
+      '<div class="tc-id" title="'+esc(tid)+'">'+esc(shortId)+'</div>'+
+      '<div class="tc-meta">'+
+        '<span class="tc-pill">'+pill+'</span>'+
+        '<span class="tc-time">'+(err?esc(err.slice(0,12))+' ':'')+rt+'</span>'+
+      '</div></div>';
+  }).filter(Boolean).join('');
+  var grid=document.getElementById('tgrid');
+  var empty=document.getElementById('tgrid-empty');
+  grid.innerHTML=cards;
+  empty.style.display=cards?'none':'block';
+  empty.textContent=_filter==='all'?'No tasks yet.':'No tasks match this filter.';
 }
 
-function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 /* ── CONTROLS ── */
-function ctrlMsg(msg, color) {
-  var el = document.getElementById('ctrl-msg');
-  el.textContent = msg;
-  el.style.color = color || '#64748b';
+function cmsg(m,c){var el=document.getElementById('cmsg');el.textContent=m;el.style.color=c||'#4b5563';}
+
+async function applyModel(){
+  var v=document.getElementById('msel').value;
+  if(!v){cmsg('Select a model first.','#ef4444');return;}
+  document.getElementById('btn-apply').disabled=true;
+  cmsg('Saving…','#f59e0b');
+  try{
+    var r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'set_model',model:v})});
+    var d=await r.json();
+    cmsg(d.ok?'✓ Saved — takes effect on next Start Fresh':'Error: '+d.error,d.ok?'#22d45a':'#ef4444');
+  }catch(e){cmsg('Failed: '+e.message,'#ef4444');}
+  document.getElementById('btn-apply').disabled=false;
 }
 
-async function applyModel() {
-  var v = document.getElementById('model-select').value;
-  if (!v) { ctrlMsg('Select a model first.', '#f87171'); return; }
-  var btn = document.getElementById('btn-apply');
-  btn.disabled = true;
-  ctrlMsg('Saving…', '#fbbf24');
-  try {
-    var r = await fetch('/api/config', {method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({action:'set_model', model:v})});
-    var d = await r.json();
-    ctrlMsg(d.ok ? '✓ Model saved — takes effect on next Start Fresh' : 'Error: ' + d.error, d.ok ? '#4ade80' : '#f87171');
-  } catch(e) { ctrlMsg('Request failed: ' + e.message, '#f87171'); }
-  btn.disabled = false;
+async function stopEvo(){
+  if(!confirm('Stop the evolution?\n\nThe current task will finish, then the agent halts. Use Start Fresh to resume.'))return;
+  var btn=document.getElementById('btn-stop');btn.disabled=true;
+  cmsg('Stopping…','#ef4444');
+  feedLog('⏹ Stop requested by user','feed-warn');
+  try{
+    var r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'stop'})});
+    var d=await r.json();
+    cmsg(d.ok?'⏹ Stopped. Click Start Fresh to resume.':'Error: '+d.error,'#ef4444');
+    setTimeout(function(){btn.disabled=false;},3000);
+  }catch(e){cmsg('Failed: '+e.message,'#ef4444');btn.disabled=false;}
 }
 
-async function stopEvolution() {
-  if (!confirm('Stop the evolution?\n\nThe current task will finish, then the agent halts. Use Start Fresh to resume.')) return;
-  var btn = document.getElementById('btn-stop');
-  btn.disabled = true;
-  ctrlMsg('Stopping…', '#f87171');
-  try {
-    var r = await fetch('/api/config', {method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({action:'stop'})});
-    var d = await r.json();
-    ctrlMsg(d.ok ? '⏹ Stopped. Click Start Fresh to resume.' : 'Error: ' + d.error,
-            d.ok ? '#f87171' : '#f87171');
-    setTimeout(function(){ btn.disabled = false; }, 3000);
-  } catch(e) { ctrlMsg('Request failed: ' + e.message, '#f87171'); btn.disabled = false; }
+async function restartEvo(){
+  var btn=document.getElementById('btn-restart');btn.disabled=true;
+  cmsg('Restarting from Gen 1…','#d946ef');
+  feedLog('🔄 Start Fresh requested — restarting from Gen 1','feed-info');
+  try{
+    var r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'restart'})});
+    var d=await r.json();
+    cmsg(d.ok?'✓ Restarting…':'Error: '+d.error,d.ok?'#d946ef':'#ef4444');
+    setTimeout(function(){btn.disabled=false;},8000);
+  }catch(e){cmsg('Failed: '+e.message,'#ef4444');btn.disabled=false;}
 }
 
-async function restartEvolution() {
-  var btn = document.getElementById('btn-restart');
-  btn.disabled = true;
-  ctrlMsg('Restarting…', '#fbbf24');
-  try {
-    var r = await fetch('/api/config', {method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({action:'restart'})});
-    var d = await r.json();
-    ctrlMsg(d.ok ? '✓ Restarting from Gen 1…' : 'Error: ' + d.error,
-            d.ok ? '#a78bfa' : '#f87171');
-    setTimeout(function(){ btn.disabled = false; }, 8000);
-  } catch(e) { ctrlMsg('Request failed: ' + e.message, '#f87171'); btn.disabled = false; }
-}
-
-/* ── POLLING ── */
-refresh();
-setInterval(refresh, 3000);
+/* ── START ── */
+tick();
+setInterval(tick,3000);
 </script>
 </body>
 </html>
