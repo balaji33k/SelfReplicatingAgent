@@ -510,5 +510,18 @@ if __name__ == "__main__":
     # Small delay so server is ready before evolution logs start
     time.sleep(2)
 
-    # Run evolution in foreground (keeps the process alive)
-    run_evolution()
+    # SERVE_ONLY=1 → dashboard-only mode (used by Colab Cell 9).
+    # Evolution is launched separately by Colab Cell 6 (main.py directly).
+    if os.environ.get("SERVE_ONLY") == "1":
+        logger.info("SERVE_ONLY mode — HTTP server running, evolution NOT auto-started.")
+        logger.info("Start evolution manually via Cell 6 in the Colab notebook.")
+        _write_run_state("stopped", reason="serve_only_mode")
+        # Keep the server alive indefinitely
+        try:
+            while True:
+                time.sleep(60)
+        except KeyboardInterrupt:
+            logger.info("Server stopped.")
+    else:
+        # Run evolution in foreground (keeps the process alive)
+        run_evolution()
