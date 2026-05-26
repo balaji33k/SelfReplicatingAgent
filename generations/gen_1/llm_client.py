@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 # ── Provider 0: Ollama (local, no limits) ────────────────────────────────────
 _OLLAMA_BASE_URL     = os.getenv("OLLAMA_BASE_URL", "")
 _OLLAMA_MODEL        = os.getenv("OLLAMA_MODEL", "qwen3:14b")  # Q4 fits 32 GB CPU (~9 GB); Scout needs ~60 GB
-_OLLAMA_CALL_TIMEOUT = 300  # CPU at ~2 tok/s — 5 min for a ~600-token response
+_OLLAMA_CALL_TIMEOUT = 900  # CPU at ~2 tok/s — allow 15 min for a ~1000-token response on loaded system
 
 # ── UNIVERSAL MODEL: Llama-4-Scout (same on all providers) ───────────────────
 # Same model, same weights, consistent results across all free providers.
