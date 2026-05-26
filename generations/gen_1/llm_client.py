@@ -15,6 +15,7 @@ Rate-limit handling:
 Token tracking written to data/token_usage.json after every call.
 Model status (active, exhausted, unavailable) written to data/model_status.json.
 """
+import concurrent.futures
 import datetime
 import json
 import logging
@@ -95,7 +96,8 @@ class LLMClient:
 
         # Hard cap: if a single API call takes longer than this, treat it as a hung
         # connection and raise so the retry loop can switch models.
-        self._call_timeout = 120   # 2 minutes max per call
+        # Uses concurrent.futures thread timeout — actually enforced unlike client param.
+        self._call_timeout = 60   # 60s max per call
 
         # Track exhausted/unavailable models across both providers
         self._exhausted_models: set = set()
@@ -192,7 +194,18 @@ class LLMClient:
         for recovery_attempt in range(_MAX_RECOVERY_ATTEMPTS):
             for attempt in range(len(all_models) + 4):
                 try:
-                    response = self._llm.invoke(lc_messages)
+                    # Use a thread-level timeout so hung connections are
+                    # actually aborted — the client-level timeout= param
+                    # on ChatGoogleGenerativeAI / ChatGroq is not reliable.
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _ex:
+                        _fut = _ex.submit(self._llm.invoke, lc_messages)
+                        try:
+                            response = _fut.result(timeout=self._call_timeout)
+                        except concurrent.futures.TimeoutError:
+                            raise TimeoutError(
+                                f"LLM call timed out after {self._call_timeout}s "
+                                f"(model={self.config.model_name})"
+                            )
                     self._record_usage(agent_name, response)
                     return response.content
 
