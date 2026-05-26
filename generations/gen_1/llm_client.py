@@ -149,6 +149,7 @@ class LLMClient:
                 max_output_tokens=8192,
                 timeout=90,        # 90s hard cap — never hang longer than this
                 max_retries=1,
+                transport="rest",  # Force HTTP/REST — gRPC can hang on HF Spaces
             )
         else:
             if not self._groq_key:
@@ -194,16 +195,17 @@ class LLMClient:
         for recovery_attempt in range(_MAX_RECOVERY_ATTEMPTS):
             for attempt in range(len(all_models) + 4):
                 try:
-                    # Use a thread-level timeout so hung connections are
-                    # actually aborted — the client-level timeout= param
-                    # on ChatGoogleGenerativeAI / ChatGroq is not reliable.
-                    # IMPORTANT: do NOT use `with executor` — its __exit__ calls
-                    # shutdown(wait=True) which blocks until the hung thread finishes,
-                    # defeating the whole point. Use shutdown(wait=False) instead.
+                    # Wrap invoke() AND response.content in the thread.
+                    # response.content can block on streaming responses if accessed
+                    # in the main thread — must be inside the timed thread too.
+                    def _llm_call(llm, msgs):
+                        resp = llm.invoke(msgs)
+                        return resp.content, resp  # return both text and obj for usage
+
                     _ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-                    _fut = _ex.submit(self._llm.invoke, lc_messages)
+                    _fut = _ex.submit(_llm_call, self._llm, lc_messages)
                     try:
-                        response = _fut.result(timeout=self._call_timeout)
+                        content, response = _fut.result(timeout=self._call_timeout)
                         _ex.shutdown(wait=False)
                     except concurrent.futures.TimeoutError:
                         _ex.shutdown(wait=False)  # release main thread immediately
@@ -212,7 +214,7 @@ class LLMClient:
                             f"(model={self.config.model_name})"
                         )
                     self._record_usage(agent_name, response)
-                    return response.content
+                    return content
 
                 except Exception as exc:
                     err_str = str(exc)
