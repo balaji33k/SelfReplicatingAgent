@@ -37,17 +37,22 @@ _proc_lock = threading.Lock()
 _STOP_FLAG = ROOT / "data" / "stop.flag"   # watched by all running gen processes
 _PID_FILE  = ROOT / "data" / "active_pid.json"  # written by each running gen
 
-# Known Groq free-tier models shown in the dashboard selector
-# Confirmed-working models on this account.
-# Groq: free tier, rolling 24h TPD window.
-# Gemini: Google AI free tier, 1M TPD / 1500 RPD / 15 RPM.
-# Gemini = primary, Groq = fallback
+# All providers shown in the dashboard model selector.
+# Priority order matches llm_client.py fallback chain.
 ALL_MODELS = [
-    {"id": "gemini-2.0-flash",      "name": "Gemini 2.0 Flash",      "tpd": "1500rpd", "tpm": "15rpm", "provider": "gemini"},
-    {"id": "gemini-2.0-flash-lite", "name": "Gemini 2.0 Flash Lite", "tpd": "1500rpd", "tpm": "30rpm", "provider": "gemini"},
-    {"id": "meta-llama/llama-4-scout-17b-16e-instruct", "name": "Llama 4 Scout 17B",       "tpd": "500k",  "tpm": "30k",  "provider": "groq"},
-    {"id": "llama-3.1-8b-instant",                       "name": "Llama 3.1 8B Instant",    "tpd": "500k",  "tpm": "20k",  "provider": "groq"},
-    {"id": "llama-3.3-70b-versatile",                    "name": "Llama 3.3 70B Versatile", "tpd": "100k",  "tpm": "12k",  "provider": "groq"},
+    # Cerebras — 2000 tok/s, least limited
+    {"id": "llama3.1-8b",           "name": "Llama 3.1 8B (Cerebras)",    "tpd": "~1M",    "tpm": "∞",    "provider": "cerebras"},
+    # SambaNova — 1500 tok/s
+    {"id": "Meta-Llama-3.3-70B-Instruct", "name": "Llama 3.3 70B (SambaNova)", "tpd": "~500k", "tpm": "30rpm", "provider": "sambanova"},
+    # Groq — 800 tok/s
+    {"id": "meta-llama/llama-4-scout-17b-16e-instruct", "name": "Llama 4 Scout (Groq)",    "tpd": "500k",   "tpm": "30k",  "provider": "groq"},
+    {"id": "llama-3.3-70b-versatile",                   "name": "Llama 3.3 70B (Groq)",    "tpd": "100k",   "tpm": "12k",  "provider": "groq"},
+    {"id": "llama-3.1-8b-instant",                      "name": "Llama 3.1 8B (Groq)",     "tpd": "500k",   "tpm": "20k",  "provider": "groq"},
+    # OpenRouter — free :free tier
+    {"id": "meta-llama/llama-4-scout:free", "name": "Llama 4 Scout (OpenRouter)", "tpd": "∞",  "tpm": "20rpm", "provider": "openrouter"},
+    # Gemini — 400 tok/s, most limited
+    {"id": "gemini-2.0-flash",      "name": "Gemini 2.0 Flash",           "tpd": "1500rpd", "tpm": "15rpm", "provider": "gemini"},
+    {"id": "gemini-2.0-flash-lite", "name": "Gemini 2.0 Flash Lite",      "tpd": "1500rpd", "tpm": "30rpm", "provider": "gemini"},
 ]
 # Keep old name as alias for any code that references it
 GROQ_FREE_MODELS = ALL_MODELS

@@ -59,14 +59,14 @@ _SCOUT = "llama-4-scout"   # logical name — each provider has slightly differe
 _CEREBRAS_API_KEY    = os.getenv("CEREBRAS_API_KEY", "")
 _CEREBRAS_BASE_URL   = "https://api.cerebras.ai/v1"
 _CEREBRAS_MODELS     = [
-    "llama-4-scout-17b-16e-instruct",  # ✅ Llama-4-Scout only
+    "llama3.1-8b",   # Cerebras confirmed model (Llama-4-Scout not available on Cerebras)
 ]
 
 # ── Provider 2: SambaNova — 1500 tok/s ───────────────────────────────────────
 _SAMBANOVA_API_KEY   = os.getenv("SAMBANOVA_API_KEY", "")
 _SAMBANOVA_BASE_URL  = "https://api.sambanova.ai/v1"
 _SAMBANOVA_MODELS    = [
-    "Llama-4-Scout-17B-16E-Instruct",  # ✅ Llama-4-Scout only
+    "Meta-Llama-3.3-70B-Instruct",     # Llama-4-Scout deprecated on SambaNova; 70B is current best
 ]
 
 # ── Provider 3: OpenRouter — free :free tier ──────────────────────────────────
@@ -403,7 +403,9 @@ class LLMClient:
                                  ("404" in err or "model_not_found" in err
                                   or "does not exist" in err
                                   or "not found" in err.lower()
-                                  or "decommissioned" in err.lower()))
+                                  or "not available" in err.lower()
+                                  or "decommissioned" in err.lower()
+                                  or "deprecat" in err.lower()))
 
                     cur = self.config.model_name
 
@@ -493,20 +495,24 @@ class LLMClient:
     # ── Retry time parser ─────────────────────────────────────────────────────
 
     def _parse_retry_seconds(self, err: str) -> float:
+        # NOTE: m.groups() is a 0-indexed tuple — use m[0], m[1], m[2], not m[1], m[2], m[3]
         for pat, fn in [
             (r"try again in (\d+)h(\d+)m(\d+(?:\.\d+)?)s",
-             lambda m: int(m[1])*3600 + int(m[2])*60 + float(m[3])),
+             lambda m: int(m[0])*3600 + int(m[1])*60 + float(m[2])),
             (r"try again in (\d+)h(\d+)m\b",
-             lambda m: int(m[1])*3600 + int(m[2])*60),
+             lambda m: int(m[0])*3600 + int(m[1])*60),
             (r"try again in (\d+)h\b",
-             lambda m: int(m[1])*3600),
+             lambda m: int(m[0])*3600),
             (r"try again in (\d+)m(\d+(?:\.\d+)?)s",
-             lambda m: int(m[1])*60 + float(m[2])),
+             lambda m: int(m[0])*60 + float(m[1])),
             (r"try again in (\d+(?:\.\d+)?)s",
-             lambda m: float(m[1])),
+             lambda m: float(m[0])),
         ]:
-            m = re.search(pat, err)
-            if m: return fn(m.groups())
+            try:
+                m = re.search(pat, err)
+                if m: return fn(m.groups())
+            except (ValueError, IndexError):
+                continue
         return _MAX_TPM_SLEEP_SEC + 1
 
     # ── Token tracking ────────────────────────────────────────────────────────
