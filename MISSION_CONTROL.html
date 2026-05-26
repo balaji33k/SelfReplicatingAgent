@@ -854,8 +854,9 @@ function renderTasks(){
     var err=r?(r.error_type||''):(isRun?(hb.current_phase||''):'');
     var rt=r?r.runtime.toFixed(1)+'s':(isRun?'…':'');
     var shortId=tid.length>20?'…'+tid.slice(-18):tid;
-    var clickable=r&&r.status==='fail'?' style="cursor:pointer" onclick="showFailDetail(\''+tid.replace(/'/g,"\\'")+'\')"':'';
-    return '<div class="tcard '+cls+'"'+clickable+' title="'+(r&&r.status==='fail'?'Click to see failure details':esc(tid))+'">'+
+    var isFail=r&&r.status==='fail';
+    var clickable=isFail?' data-fail-tid="'+esc(tid)+'" style="cursor:pointer"':'';
+    return '<div class="tcard '+cls+'"'+clickable+' title="'+(isFail?'Click to see failure details':esc(tid))+'">'+
       '<div class="tc-id">'+esc(shortId)+(r&&r.status==='fail'?' <span style="font-size:.6rem;opacity:.6">🔍</span>':'')+'</div>'+
       '<div class="tc-row">'+
         '<span class="tc-pill">'+pill+'</span>'+
@@ -871,12 +872,43 @@ function renderTasks(){
   empty.textContent=_filt==='all'?'No tasks yet.':'No tasks match.';
 }
 
+/* Event delegation — avoids inline onclick which can be blocked by CSP */
+document.addEventListener('click', function(e){
+  // Open failure detail modal
+  var card=e.target.closest('[data-fail-tid]');
+  if(card){ showFailDetail(card.getAttribute('data-fail-tid')); return; }
+  // Close modal via ✕ button
+  var closeBtn=e.target.closest('[data-close-modal]');
+  if(closeBtn){ var m=document.getElementById(closeBtn.getAttribute('data-close-modal')); if(m)m.style.display='none'; return; }
+  // Close modal by clicking dark overlay
+  if(e.target.id==='fail-detail-modal'){ e.target.style.display='none'; return; }
+});
+
 function showFailDetail(tid){
-  var prog=S.prog; if(!prog)return;
-  var r=(prog.results||{})[tid]; if(!r)return;
-  var desc=(prog.descriptions||{})[tid]||tid;
+  var prog=S.prog;
   var m=document.getElementById('fail-detail-modal');
+  if(!m) return;
+
+  // Populate title immediately so the modal can open even if data is incomplete
   document.getElementById('fd-title').textContent=tid;
+
+  if(!prog||!prog.results||!prog.results[tid]){
+    // Modal opens but shows a "data not yet available" message
+    document.getElementById('fd-desc').textContent='';
+    document.getElementById('fd-error').textContent='—';
+    document.getElementById('fd-runtime').textContent='—';
+    document.getElementById('fd-agents').textContent='—';
+    document.getElementById('fd-agent-fails').textContent='—';
+    document.getElementById('fd-stderr').textContent='Result data not loaded yet. Try again in a moment.';
+    document.getElementById('fd-stdout').textContent='(none)';
+    document.getElementById('fd-code').textContent='(none)';
+    var lbl0=document.getElementById('fd-code-lbl'); if(lbl0)lbl0.textContent='';
+    m.style.display='flex';
+    return;
+  }
+
+  var r=prog.results[tid];
+  var desc=(prog.descriptions||{})[tid]||tid;
   document.getElementById('fd-desc').textContent=desc;
   document.getElementById('fd-error').textContent=r.error_type||'unknown';
   document.getElementById('fd-runtime').textContent=(r.runtime||0).toFixed(2)+'s';
@@ -889,9 +921,7 @@ function showFailDetail(tid){
   var snippet=(r.code_snippet||'').trim();
   document.getElementById('fd-code').textContent=snippet||'(not captured yet — run in progress)';
   var lbl=document.getElementById('fd-code-lbl');
-  if(lbl){
-    lbl.textContent=snippet?'— '+snippet.split('\n').length+' lines':'';
-  }
+  if(lbl) lbl.textContent=snippet?'— '+snippet.split('\n').length+' lines':'';
   m.style.display='flex';
 }
 
@@ -963,9 +993,9 @@ setInterval(tick,3000);
 .fdm-pre.code{color:#a5f3fc;max-height:520px}
 </style>
 
-<div id="fail-detail-modal" onclick="if(event.target===this)this.style.display='none'">
+<div id="fail-detail-modal">
   <div class="fdm">
-    <button class="fdm-close" onclick="document.getElementById('fail-detail-modal').style.display='none'">✕</button>
+    <button class="fdm-close" data-close-modal="fail-detail-modal">✕</button>
     <h2>❌ Task Failure — <span id="fd-title"></span></h2>
     <div class="fdm-sub" id="fd-desc"></div>
     <div class="fdm-grid">
