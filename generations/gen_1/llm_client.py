@@ -197,15 +197,20 @@ class LLMClient:
                     # Use a thread-level timeout so hung connections are
                     # actually aborted — the client-level timeout= param
                     # on ChatGoogleGenerativeAI / ChatGroq is not reliable.
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _ex:
-                        _fut = _ex.submit(self._llm.invoke, lc_messages)
-                        try:
-                            response = _fut.result(timeout=self._call_timeout)
-                        except concurrent.futures.TimeoutError:
-                            raise TimeoutError(
-                                f"LLM call timed out after {self._call_timeout}s "
-                                f"(model={self.config.model_name})"
-                            )
+                    # IMPORTANT: do NOT use `with executor` — its __exit__ calls
+                    # shutdown(wait=True) which blocks until the hung thread finishes,
+                    # defeating the whole point. Use shutdown(wait=False) instead.
+                    _ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+                    _fut = _ex.submit(self._llm.invoke, lc_messages)
+                    try:
+                        response = _fut.result(timeout=self._call_timeout)
+                        _ex.shutdown(wait=False)
+                    except concurrent.futures.TimeoutError:
+                        _ex.shutdown(wait=False)  # release main thread immediately
+                        raise TimeoutError(
+                            f"LLM call timed out after {self._call_timeout}s "
+                            f"(model={self.config.model_name})"
+                        )
                     self._record_usage(agent_name, response)
                     return response.content
 
