@@ -31,12 +31,13 @@ logger = logging.getLogger(__name__)
 # These are always copied from the parent generation by spawner.py.
 INFRA_FILES = {"telemetry.py", "lineage_memory.py", "llm_client.py"}
 
-# Core orchestration files the LLM MUST always generate — these are the minimum
-# needed to run and evolve. Agent/pipeline files beyond this are decided by the LLM.
-# The LLM declares its full file manifest in the planning phase (## FILE MANIFEST section).
+# The 3 files that must exist for the lineage to survive.
+# Without all three, the loop is permanently dead — no run, no evolution, no offspring.
+# Everything else is topology — the LLM declares what it will generate in ## FILE MANIFEST.
 CORE_FILES = [
-    "main.py", "config.py", "task_manager.py",
-    "analysis.py", "evolution_engine.py", "spawner.py",
+    "main.py",            # runs the benchmark
+    "evolution_engine.py",  # designs the next generation
+    "spawner.py",         # births the next generation
 ]
 
 # Delay between per-file LLM calls to stay inside TPM budget (seconds)
@@ -241,13 +242,10 @@ You decide the topology — do not feel constrained to any prior agent names or 
 
 ## FILE MANIFEST
 List every .py file you will generate for Generation {next_gen}, one per line, format: filename.py
-REQUIRED core files (always include): main.py, config.py, task_manager.py, analysis.py, evolution_engine.py, spawner.py
-Additional files: list any pipeline/agent/utility files you design — use whatever names fit your topology.
-Example (your actual files may differ):
+REQUIRED (the 3 files without which the lineage dies): main.py, evolution_engine.py, spawner.py
+Everything else is your choice — use whatever names, count, and structure fit your topology.
+Example (your actual files will differ):
   main.py
-  config.py
-  task_manager.py
-  analysis.py
   evolution_engine.py
   spawner.py
   pipeline.py
@@ -447,8 +445,9 @@ REQUIREMENTS:
 - llm_client.py is INFRASTRUCTURE — do NOT generate it; it is copied automatically
 - Use the LLMClient class (from llm_client import LLMClient) to make all LLM calls
 - Every agent file must own its prompt and logic internally
-- You choose the pipeline topology and framework — use whatever design best addresses failures
-- No external frameworks are mandated — design from first principles
+- You choose topology, framework, agent count, file structure — design from first principles
+- The only survival constraint: main.py must run the benchmark, evolution_engine.py must
+  design offspring, spawner.py must birth offspring. Everything else is free.
 
 MAS DESIGN PRINCIPLES (non-negotiable — every generation must implement these):
 - Every loop needs TWO exits: (a) objective satisfaction signal — e.g. tests pass,
