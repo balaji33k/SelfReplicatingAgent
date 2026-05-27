@@ -319,38 +319,50 @@ class LLMClient:
 
     # ── Fallback chain ────────────────────────────────────────────────────────
 
-    def _build_fallback_chain(self) -> List[str]:
-        """
-        Provider priority — Kaggle GPU model always first when running on Kaggle.
-
-        ON KAGGLE (KAGGLE_DATA_PROXY_TOKEN or KAGGLE_KERNEL_RUN_TYPE env vars are set):
-          1. Kaggle GPU model (Qwen2.5-Coder via shim) — ~40 tok/s, no rate limits  ← FIRST
-          2. Cerebras    — cloud fallback if Kaggle model fails
-          3. SambaNova
-          4. Groq
-          5. OpenRouter
-          6. Gemini
-
-        NOT ON KAGGLE (cloud-only):
-          1. Cerebras → SambaNova → Groq → OpenRouter → Gemini
-          6. Ollama   — CPU emergency only (~2 tok/s, last resort)
-        """
+    @staticmethod
+    def _on_kaggle() -> bool:
+        """Detect Kaggle runtime via auto-set environment variables."""
         import os
-        on_kaggle = bool(
-            os.environ.get("KAGGLE_DATA_PROXY_TOKEN")   # auto-set by Kaggle runtime
-            or os.environ.get("KAGGLE_KERNEL_RUN_TYPE") # auto-set by Kaggle runtime
+        return bool(
+            os.environ.get("KAGGLE_DATA_PROXY_TOKEN")
+            or os.environ.get("KAGGLE_KERNEL_RUN_TYPE")
         )
 
+    @staticmethod
+    def _cloud_fallback_allowed() -> bool:
+        """Cloud fallback only if user explicitly sets ALLOW_CLOUD_FALLBACK=1."""
+        import os
+        return os.environ.get("ALLOW_CLOUD_FALLBACK", "").strip() == "1"
+
+    def _build_fallback_chain(self) -> List[str]:
+        """
+        ON KAGGLE (auto-detected via KAGGLE_DATA_PROXY_TOKEN / KAGGLE_KERNEL_RUN_TYPE):
+          - Only the Kaggle GPU model is in the chain.
+          - If it fails, the run STOPS with a clear message asking the user to decide.
+          - Cloud APIs are NOT added automatically — set ALLOW_CLOUD_FALLBACK=1 to opt in.
+
+        ON KAGGLE with ALLOW_CLOUD_FALLBACK=1:
+          Kaggle GPU → Cerebras → SambaNova → Groq → OpenRouter → Gemini
+
+        NOT ON KAGGLE (cloud-only):
+          Cerebras → SambaNova → Groq → OpenRouter → Gemini → Ollama (CPU last resort)
+        """
         chain = []
-        if self._use_ollama and on_kaggle:
-            chain.append(self._ollama_model)            # 1. Kaggle GPU model — first
-        if _CEREBRAS_API_KEY:   chain.extend(_CEREBRAS_MODELS)
-        if _SAMBANOVA_API_KEY:  chain.extend(_SAMBANOVA_MODELS)
-        if _GROQ_API_KEY:       chain.extend(_GROQ_MODELS)
-        if _OPENROUTER_API_KEY: chain.extend(_OPENROUTER_MODELS)
-        if _GEMINI_API_KEY:     chain.extend(_GEMINI_MODELS)
-        if self._use_ollama and not on_kaggle:
-            chain.append(self._ollama_model)            # last: CPU emergency (non-Kaggle)
+        if self._on_kaggle():
+            chain.append(self._ollama_model)            # Kaggle GPU model — only provider
+            if self._cloud_fallback_allowed():          # opt-in cloud fallback
+                if _CEREBRAS_API_KEY:   chain.extend(_CEREBRAS_MODELS)
+                if _SAMBANOVA_API_KEY:  chain.extend(_SAMBANOVA_MODELS)
+                if _GROQ_API_KEY:       chain.extend(_GROQ_MODELS)
+                if _OPENROUTER_API_KEY: chain.extend(_OPENROUTER_MODELS)
+                if _GEMINI_API_KEY:     chain.extend(_GEMINI_MODELS)
+        else:
+            if _CEREBRAS_API_KEY:   chain.extend(_CEREBRAS_MODELS)
+            if _SAMBANOVA_API_KEY:  chain.extend(_SAMBANOVA_MODELS)
+            if _GROQ_API_KEY:       chain.extend(_GROQ_MODELS)
+            if _OPENROUTER_API_KEY: chain.extend(_OPENROUTER_MODELS)
+            if _GEMINI_API_KEY:     chain.extend(_GEMINI_MODELS)
+            if self._use_ollama:    chain.append(self._ollama_model)  # CPU last resort
         return chain
 
     # ── Qwen3 thinking mode ───────────────────────────────────────────────────
@@ -454,7 +466,27 @@ class LLMClient:
             else:
                 break
 
-            # All models exhausted — smart sleep until nearest recovery
+            # All models exhausted
+            if self._on_kaggle() and not self._cloud_fallback_allowed():
+                # On Kaggle with no cloud fallback opted in — stop and tell the user.
+                raise RuntimeError(
+                    "\n"
+                    "╔══════════════════════════════════════════════════════════════╗\n"
+                    "║  KAGGLE GPU MODEL FAILED — run halted.                       ║\n"
+                    "║                                                              ║\n"
+                    "║  The Kaggle GPU model (Qwen2.5-Coder shim) stopped          ║\n"
+                    "║  responding. Cloud APIs were NOT used automatically.         ║\n"
+                    "║                                                              ║\n"
+                    "║  To switch to cloud APIs (Groq / Cerebras etc.):            ║\n"
+                    "║    1. Add your API key to Kaggle Secrets                     ║\n"
+                    "║       (e.g. GROQ_API_KEY at console.groq.com/keys)          ║\n"
+                    "║    2. In Cell 9, add:                                        ║\n"
+                    "║       os.environ['ALLOW_CLOUD_FALLBACK'] = '1'              ║\n"
+                    "║    3. Re-run from Cell 9 onwards                             ║\n"
+                    "╚══════════════════════════════════════════════════════════════╝"
+                )
+
+            # Not on Kaggle — smart sleep until nearest cloud provider recovers
             now_utc  = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
             wait_sec = float(_RECOVERY_WAIT_SEC)
             if self._retry_after:
