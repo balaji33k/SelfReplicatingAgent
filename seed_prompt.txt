@@ -9,65 +9,61 @@ Build a system that:
 4. Uses that failure data to design and spawn a better next generation of itself
 5. Repeats this evolutionary loop indefinitely
 
-MULTI-AGENT PIPELINE GUIDELINES
---------------------------------
+MULTI-AGENT PIPELINE PRINCIPLE
+-------------------------------
 The benchmark solving pipeline must use specialist agents, not a single generalist LLM call.
-Each specialist agent has exactly ONE cognitive responsibility. It cannot be changed.
-The pipeline flows: Analyst → Architect → Coder → Critic → Reviser → Executor → Debugger.
-A parallel path: TestWriter receives AnalysisSpec ONLY — it never sees any code artifact.
+Each specialist agent has exactly ONE cognitive responsibility.
+An agent that does more than one thing is a design flaw — split it.
 
-Specialist agent responsibilities (strict):
-  Analyst     — Reads the problem and produces a structured AnalysisSpec. No code, no algorithm.
-  Architect   — Reads AnalysisSpec and produces a DesignSpec with pseudocode steps. No Python.
-  Coder       — Reads DesignSpec and translates it to Python exactly. No re-analysis.
-  Critic      — Reviews CodeArtifact against AnalysisSpec adversarially. NEVER sees DesignSpec.
-                Forbidden from: rewriting code. Finds bugs only.
-  Reviser     — Applies targeted fixes from Critic's report only. No redesign. No new requirements.
-  TestWriter  — Reads AnalysisSpec ONLY. Writes test cases against the spec, not the code.
-                Structural isolation: never receives CodeArtifact. This prevents confirmation bias.
-  Debugger    — Receives code + ExecutionResult. Patches the exact failure. No redesign.
-                If a redesign is needed, it flags it and returns the original.
+YOU decide the topology:
+  - How many agents to use
+  - What each agent is responsible for
+  - In what order they run
+  - Which agents run in parallel vs. sequentially
+  - Which agents can be enabled/disabled based on failure evidence
 
-Information isolation (enforced structurally, not by convention):
-  - Critic does NOT receive DesignSpec → reviews code against spec without design bias
-  - TestWriter does NOT receive any CodeArtifact → writes tests against spec, not implementation
-  - Debugger does NOT receive AnalysisSpec or DesignSpec → patches only, does not redesign
-
-Topology as evolvable config:
-  config.py must contain AgentTopologyConfig with fields:
-    enable_critic, enable_reviser, enable_test_writer, enable_debugger (bool each)
-    max_revise_cycles (int) — prevent Critic→Reviser infinite loops
-    max_debug_cycles (int) — prevent Debugger infinite loops
-    execution_timeout (int) — seconds per test run
-  pipeline.py reads AgentTopologyConfig — no hardcoded agent lists anywhere.
-  The EvolutionEngine may evolve the topology config based on failure patterns.
+The only constraints on topology design are:
+  1. Each agent must have exactly one cognitive job
+  2. Agents must be informationally isolated — each agent receives only the inputs
+     it needs for its specific job. Giving an agent information it does not need
+     introduces bias and defeats the purpose of specialization.
+  3. The topology must be encoded as configuration — never hardcoded.
+     The evolution engine must be able to change the topology for the next generation.
+  4. Loops within the pipeline must have TWO exit conditions:
+     a. Objective satisfaction — a verifiable goal is met (tests pass, error type changes)
+        NOT an agent's subjective opinion that the result "looks good"
+     b. Resource ceiling — a hard count limit prevents infinite loops
+  5. If a loop iteration produces the same failure as the previous iteration,
+     exit immediately — the agent is stuck and more cycles waste tokens.
 
 TOPOLOGY GUIDELINES
 -------------------
 Design a pipeline of clearly separated stages where each stage has one responsibility.
-The pipeline should flow from task ingestion -> solving -> execution -> analysis -> evolution.
+The pipeline should flow from task ingestion → solving → execution → analysis → evolution.
 Each stage should be independently replaceable without breaking the others.
-The topology must loop -- the last stage must feed back into the first of the next generation.
+The topology must loop — the last stage feeds back into the first of the next generation.
+Parallel branches are encouraged where sub-tasks are independent of each other.
+Skip tasks that are structurally unsolvable before invoking any LLM agent.
 
 PROMPTING GUIDELINES
 --------------------
-All prompts the system generates must be generic -- not tuned to any specific task, domain,
+All prompts the system generates must be generic — not tuned to any specific task, domain,
 library, or problem type.
 A prompt that works for a sorting algorithm must work equally for a web framework bug.
-Prompts must instruct the LLM on HOW to reason and structure a solution --
+Prompts must instruct the LLM on HOW to reason and structure a solution —
 not WHAT the solution should look like.
 No prompt should reference specific libraries, APIs, frameworks, or problem categories.
-The system must derive all task-specific context from the task data itself at runtime --
+The system must derive all task-specific context from the task data itself at runtime —
 never from assumptions baked into the prompt template.
 
 IMPROVEMENT GUIDELINES
 ----------------------
 Each generation must measure its own performance before designing the next.
-Failures must be classified by root cause -- not just counted.
+Failures must be classified by root cause — not just counted.
 The prompt that designs the next generation must include what failed, why it failed,
 and what the next generation should do differently.
-The next generation must be designed to fix identified failures -- not copy the current design.
-Improvement prompts must also remain generic -- they describe failure patterns and reasoning
+The next generation must be designed to fix identified failures — not copy the current design.
+Improvement prompts must also remain generic — they describe failure patterns and reasoning
 strategies, never solutions to specific tasks seen before.
 
 DNA-ONLY TRANSFER (enforced):
@@ -86,7 +82,7 @@ DNA-ONLY TRANSFER (enforced):
 
 OFFSPRING GENERATION OBJECTIVE
 -------------------------------
-Each offspring is not merely a new generation of code -- it is a refined version of
+Each offspring is not merely a new generation of code — it is a refined version of
 this seed prompt's intent, shaped by real execution experience.
 
 The primary objective of every offspring is to generate working, higher-quality software
@@ -107,7 +103,7 @@ Each generation must explicitly state in its improvement log:
   - How it changed the solving strategy as a result
   - What measurable improvement it expects in the next benchmark run
 
-The measure of a generation's success is not that it spawned a next generation --
+The measure of a generation's success is not that it spawned a next generation —
 it is that the code its successor generates is more correct, more robust,
 and of higher software quality than what the current generation produced.
 
@@ -143,7 +139,7 @@ UMBILICAL CORD (DNA packet):
 
 NEXT GENERATION SPAWNING GUIDELINES
 ------------------------------------
-The next generation must be fully self-contained -- everything it needs must be written to disk.
+The next generation must be fully self-contained — everything it needs must be written to disk.
 Spawning must validate that all required components were generated before writing anything.
 If the LLM fails to produce a complete next generation, spawning must abort loudly.
 The next generation must be launched as an independent process after spawning.
@@ -163,30 +159,30 @@ This rule has no exceptions. It applies to every generation, every component, ev
   4. The EvolutionEngine must NEVER include parent source code in the generation prompt.
      The LLM designs the next generation from failure analysis alone (DNA-only transfer).
      It must not see parent .py files — this prevents copy-editing disguised as improvement.
-  5. The improvement log MUST describe specifically what changed in each agent and why.
+  5. The improvement log MUST describe specifically what changed and why.
      "No changes needed" is not an acceptable entry for any required file.
   6. Each generation's pipeline topology may differ from its parent's — the LLM may
-     add agents, remove agents, or change cycle limits based on failure evidence.
+     add agents, remove agents, redesign the pipeline entirely based on failure evidence.
 
 GUARDRAILS
 ----------
 No Copying:
   The next generation must never be a copy or near-copy of the current generation.
-  Every component must be redesigned based on failure evidence -- not carried forward unchanged.
+  Every component must be redesigned based on failure evidence — not carried forward unchanged.
   The spawner must require the LLM to generate ALL logic files from scratch on every spawn.
   The spawner must ABORT with a RuntimeError if any required file is missing from the LLM output.
   The spawner must ABORT if any file is content-identical to the parent (content-identity check).
-  Copying parent files as a fallback is strictly forbidden -- it produces silent clones, not improvements.
+  Copying parent files as a fallback is strictly forbidden — it produces silent clones, not improvements.
   If the LLM cannot improve a component, it must explain why in the improvement log,
   not silently reproduce the same logic.
 
 No Fabrication:
   Pass rates, accuracy scores, and task results must only come from actual sandbox execution.
   The system must never assume, estimate, or hallucinate benchmark outcomes.
-  If execution cannot be verified, the task must be marked as failed -- not passed.
+  If execution cannot be verified, the task must be marked as failed — not passed.
 
 No Silent Failure:
-  Every failure -- task execution, LLM call, JSON parse, file write -- must be logged explicitly.
+  Every failure — task execution, LLM call, JSON parse, file write — must be logged explicitly.
   The system must never swallow exceptions or continue as if a failure did not occur.
   A generation that cannot complete its benchmark must record that state before exiting.
 
@@ -201,7 +197,7 @@ No Unchecked Spawning:
   Partial results must be clearly marked as partial in lineage metadata.
 
 No Benchmark Tampering:
-  The task pool is a read-only input -- the system must never modify, filter, or skip tasks
+  The task pool is a read-only input — the system must never modify, filter, or skip tasks
   to inflate its pass rate.
   Every task in the pool must be attempted, and every result must be recorded honestly.
 
