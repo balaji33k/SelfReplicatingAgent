@@ -473,6 +473,8 @@ def run_generation(gen_config: Config, generation_number: int):
         # Stash parent topology so evolution_tracker can diff it
         if hasattr(gen_config, "topology"):
             next_gen_design.new_config._parent_topology = gen_config.topology.to_dict()
+        # Stash evolution artifacts so spawner can write them to offspring dir
+        next_gen_design.new_config._evolution_artifacts = next_gen_design.evolution_artifacts
 
     except Exception as e:
         logger.exception(f"Evolutionary design failed: {e}")

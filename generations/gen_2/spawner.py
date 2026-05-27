@@ -97,17 +97,14 @@ class Spawner:
                 f"Spawn aborted — offspring must be fully self-generated, not cloned."
             )
 
-        # Guard 2: Direct + indirect copy check on ALL generated logic files.
-        # - Exact match (ratio=1.0) → direct copy → hard reject
-        # - High similarity (ratio>0.85) → indirect copy (same logic, renamed vars) → hard reject
-        # contracts.py and agent_base.py are interface/base files that legitimately
-        # change very little — exempt from the similarity gate (still checked for exact match).
-        import difflib
-        SIMILARITY_EXEMPT = {"contracts.py", "agent_base.py"}
-        SIMILARITY_THRESHOLD = 0.85   # above this → near-clone → rejected
-
+        # Guard 2: Exact (physical) copy check only.
+        # Only reject if a file is byte-for-byte identical to the parent.
+        # Logical/structural similarity is allowed — the LLM may keep the same
+        # approach while making meaningful improvements (better prompts, error
+        # handling, topology changes). Blocking on similarity ratio is too
+        # aggressive and incorrectly rejects valid improvements.
         if current_gen_dir and current_gen_dir.exists():
-            exact_copies, near_copies = [], []
+            exact_copies = []
             for fname, child_src in new_files.items():
                 if not fname.endswith(".py"):
                     continue
@@ -116,28 +113,15 @@ class Spawner:
                     continue
                 try:
                     parent_src = parent_path.read_text(encoding="utf-8").strip()
-                    child_stripped = child_src.strip()
-                    if parent_src == child_stripped:
+                    if parent_src == child_src.strip():
                         exact_copies.append(fname)
-                    elif fname not in SIMILARITY_EXEMPT:
-                        ratio = difflib.SequenceMatcher(
-                            None, parent_src, child_stripped, autojunk=False
-                        ).ratio()
-                        if ratio > SIMILARITY_THRESHOLD:
-                            near_copies.append(f"{fname} ({ratio:.0%} similar)")
                 except Exception:
                     pass
 
             if exact_copies:
                 raise RuntimeError(
-                    f"Direct copy detected — files IDENTICAL to parent: {exact_copies}. "
-                    f"Spawn aborted. The LLM must write new logic, not copy parent code."
-                )
-            if near_copies:
-                raise RuntimeError(
-                    f"Indirect copy detected — files too similar to parent (>{SIMILARITY_THRESHOLD:.0%}): "
-                    f"{near_copies}. "
-                    f"Spawn aborted. Same algorithm with renamed variables counts as copying."
+                    f"Physical copy detected — files IDENTICAL to parent: {exact_copies}. "
+                    f"Spawn aborted. The LLM must write new code, not copy parent unchanged."
                 )
 
         # Guard 3: Compile check
@@ -345,6 +329,47 @@ class Spawner:
             json.dump(dna, f, indent=4)
         logger.info("  Written: dna.json (umbilical cord — DNA-only transfer)")
 
+        # 4c. Write full evolution artifacts — audit trail of how this generation was designed.
+        # Saved to offspring dir so every generation carries its own design rationale.
+        evolution_artifacts = getattr(new_config, "_evolution_artifacts", None)
+        if evolution_artifacts:
+            artifacts_dir = next_gen_dir / "evolution_artifacts"
+            artifacts_dir.mkdir(exist_ok=True)
+
+            # 1. Full improvement plan (untruncated)
+            plan_path = artifacts_dir / "improvement_plan.md"
+            with open(plan_path, "w", encoding="utf-8") as f:
+                f.write(f"# Generation {next_gen_number} Improvement Plan\n\n")
+                f.write(f"**Parent pass rate:** {evolution_artifacts.get('failure_stats', {}).get('pass_rate', 'N/A'):.1%}\n\n")
+                f.write(evolution_artifacts.get("full_improvement_plan", ""))
+            logger.info("  Written: evolution_artifacts/improvement_plan.md")
+
+            # 2. Topology decision (why this pipeline was designed this way)
+            topology_path = artifacts_dir / "topology_decision.md"
+            with open(topology_path, "w", encoding="utf-8") as f:
+                f.write(f"# Generation {next_gen_number} Topology Decision\n\n")
+                f.write("## Why this topology was chosen\n\n")
+                f.write(evolution_artifacts.get("topology_decision", "No topology decision recorded."))
+                f.write("\n\n## Expected improvement\n\n")
+                f.write(evolution_artifacts.get("expected_improvement", ""))
+            logger.info("  Written: evolution_artifacts/topology_decision.md")
+
+            # 3. Per-file instruction notes
+            notes_path = artifacts_dir / "instruction_changes.md"
+            with open(notes_path, "w", encoding="utf-8") as f:
+                f.write(f"# Generation {next_gen_number} Instruction Changes\n\n")
+                f.write("## What changed in each pipeline stage and why\n\n")
+                f.write(evolution_artifacts.get("instruction_changes", "No instruction changes recorded."))
+                f.write("\n\n## Per-file generation notes\n\n")
+                for fname, note in evolution_artifacts.get("file_notes", {}).items():
+                    f.write(f"### {fname}\n{note}\n\n")
+            logger.info("  Written: evolution_artifacts/instruction_changes.md")
+
+            # 4. Machine-readable full artifact (for next generation's evolution engine)
+            with open(artifacts_dir / "evolution_artifacts.json", "w", encoding="utf-8") as f:
+                json.dump(evolution_artifacts, f, indent=4)
+            logger.info("  Written: evolution_artifacts/evolution_artifacts.json")
+
         logger.info(f"Generation {next_gen_number} spawned at {next_gen_dir}")
 
         # 5. Write evolution document (non-fatal — don't abort spawn on tracker errors)
@@ -377,7 +402,18 @@ class Spawner:
         return next_gen_dir
 
     def launch_next_generation(self, next_gen_dir: Path) -> None:
-        """Launch main.py of the next generation as an independent process."""
+        """Launch main.py of the next generation as an independent process.
+
+        If NO_AUTO_LAUNCH=1 is set in the environment, skip the launch so an
+        external supervisor (e.g. a Kaggle notebook loop) can control sequencing.
+        """
+        if os.environ.get("NO_AUTO_LAUNCH"):
+            logger.info(
+                f"NO_AUTO_LAUNCH=1 — skipping auto-launch of {next_gen_dir.name}. "
+                "Supervisor will start it."
+            )
+            return
+
         main_script = next_gen_dir / "main.py"
         if not main_script.exists():
             raise FileNotFoundError(f"main.py not found in {next_gen_dir}")

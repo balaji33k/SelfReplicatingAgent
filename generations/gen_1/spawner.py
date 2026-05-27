@@ -329,6 +329,47 @@ class Spawner:
             json.dump(dna, f, indent=4)
         logger.info("  Written: dna.json (umbilical cord — DNA-only transfer)")
 
+        # 4c. Write full evolution artifacts — audit trail of how this generation was designed.
+        # Saved to offspring dir so every generation carries its own design rationale.
+        evolution_artifacts = getattr(new_config, "_evolution_artifacts", None)
+        if evolution_artifacts:
+            artifacts_dir = next_gen_dir / "evolution_artifacts"
+            artifacts_dir.mkdir(exist_ok=True)
+
+            # 1. Full improvement plan (untruncated)
+            plan_path = artifacts_dir / "improvement_plan.md"
+            with open(plan_path, "w", encoding="utf-8") as f:
+                f.write(f"# Generation {next_gen_number} Improvement Plan\n\n")
+                f.write(f"**Parent pass rate:** {evolution_artifacts.get('failure_stats', {}).get('pass_rate', 'N/A'):.1%}\n\n")
+                f.write(evolution_artifacts.get("full_improvement_plan", ""))
+            logger.info("  Written: evolution_artifacts/improvement_plan.md")
+
+            # 2. Topology decision (why this pipeline was designed this way)
+            topology_path = artifacts_dir / "topology_decision.md"
+            with open(topology_path, "w", encoding="utf-8") as f:
+                f.write(f"# Generation {next_gen_number} Topology Decision\n\n")
+                f.write("## Why this topology was chosen\n\n")
+                f.write(evolution_artifacts.get("topology_decision", "No topology decision recorded."))
+                f.write("\n\n## Expected improvement\n\n")
+                f.write(evolution_artifacts.get("expected_improvement", ""))
+            logger.info("  Written: evolution_artifacts/topology_decision.md")
+
+            # 3. Per-file instruction notes
+            notes_path = artifacts_dir / "instruction_changes.md"
+            with open(notes_path, "w", encoding="utf-8") as f:
+                f.write(f"# Generation {next_gen_number} Instruction Changes\n\n")
+                f.write("## What changed in each pipeline stage and why\n\n")
+                f.write(evolution_artifacts.get("instruction_changes", "No instruction changes recorded."))
+                f.write("\n\n## Per-file generation notes\n\n")
+                for fname, note in evolution_artifacts.get("file_notes", {}).items():
+                    f.write(f"### {fname}\n{note}\n\n")
+            logger.info("  Written: evolution_artifacts/instruction_changes.md")
+
+            # 4. Machine-readable full artifact (for next generation's evolution engine)
+            with open(artifacts_dir / "evolution_artifacts.json", "w", encoding="utf-8") as f:
+                json.dump(evolution_artifacts, f, indent=4)
+            logger.info("  Written: evolution_artifacts/evolution_artifacts.json")
+
         logger.info(f"Generation {next_gen_number} spawned at {next_gen_dir}")
 
         # 5. Write evolution document (non-fatal — don't abort spawn on tracker errors)

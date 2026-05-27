@@ -51,6 +51,7 @@ class NextGenerationDesign:
     new_config: Config
     new_prompts_content: Dict[str, str] = field(default_factory=dict)
     improvement_log_message: str = ""
+    evolution_artifacts: dict = field(default_factory=dict)  # full audit trail
 
 
 class EvolutionEngine:
@@ -96,8 +97,11 @@ class EvolutionEngine:
         contracts_spec = self._load_contracts_spec()
 
         # Phase 1: Improvement plan
+        self._last_plan_sections = {}
         improvement_log = self._get_improvement_plan(failure_ctx, gen_num, next_gen)
+        plan_sections = getattr(self, "_last_plan_sections", {})
         logger.info(f"Improvement plan: {improvement_log[:120]}...")
+        logger.info(f"Topology decision: {plan_sections.get('topology_decision', '')[:120]}...")
 
         # Notify caller as soon as the plan is ready (before any files are generated)
         if plan_callback:
@@ -119,6 +123,7 @@ class EvolutionEngine:
 
         # Phase 2: Generate each file — NO parent code shown, only the plan + stats
         files: Dict[str, str] = {}
+        file_notes: Dict[str, str] = {}   # per-file generation notes for audit trail
         for i, fname in enumerate(REQUIRED_FILES):
             logger.info(f"  Generating [{i+1}/{len(REQUIRED_FILES)}]: {fname}")
             content = self._generate_one_file(
@@ -130,6 +135,11 @@ class EvolutionEngine:
                 next_gen=next_gen,
             )
             files[fname] = content
+            file_notes[fname] = (
+                f"Generated for Gen {next_gen}. "
+                f"Role: {self._file_role(fname)}. "
+                f"Addressed: {plan_sections.get('instruction_changes', '')[:100]}"
+            )
             if plan_callback:
                 try:
                     plan_callback("file_done", {
@@ -146,6 +156,27 @@ class EvolutionEngine:
         if missing:
             raise RuntimeError(f"Evolution incomplete — missing files: {missing}")
 
+        # Build full evolution artifact — saved to offspring dir by spawner
+        import datetime as _dt
+        evolution_artifacts = {
+            "parent_generation": gen_num,
+            "child_generation": next_gen,
+            "timestamp": _dt.datetime.now().isoformat(),
+            "failure_analysis": plan_sections.get("failure_analysis", ""),
+            "topology_decision": plan_sections.get("topology_decision", ""),
+            "instruction_changes": plan_sections.get("instruction_changes", ""),
+            "expected_improvement": plan_sections.get("expected_improvement", ""),
+            "full_improvement_plan": plan_sections.get("raw", improvement_log),
+            "files_generated": list(files.keys()),
+            "file_notes": file_notes,
+            "failure_stats": {
+                "pass_rate": analysis_report.pass_rate,
+                "passed": analysis_report.passed,
+                "total": analysis_report.total_tasks,
+                "error_breakdown": dict(getattr(analysis_report, "failure_breakdown", {})),
+            },
+        }
+
         logger.info(f"Generation {next_gen} design complete. {len(files)} files generated.")
         new_config = parent_config
         new_config.improvement_log = improvement_log
@@ -153,6 +184,7 @@ class EvolutionEngine:
             new_config=new_config,
             new_prompts_content=files,
             improvement_log_message=improvement_log,
+            evolution_artifacts=evolution_artifacts,
         )
 
     # ── Phase 1: Planning ─────────────────────────────────────────────────────
@@ -178,18 +210,29 @@ AGGREGATE FAILURE STATISTICS (Generation {gen_num}):
     Treat failure statistics as signals of SYSTEMIC weaknesses in the agent design.
 
     Error type → architectural root cause:
-      AssertionError       → reasoning/logic gap in Coder agent prompt (add chain-of-thought)
-      SyntaxError          → markdown fences not stripped, or Coder generating prose instead of code
-      ModuleNotFoundError  → package not installed in sandbox; sandbox_execution.py must auto-install
-                             missing packages via subprocess pip before running generated code
-      ImportError          → same as ModuleNotFoundError — sandbox must pip-install on demand
-      TimeoutError         → Coder generates O(n²)+ algorithms; prompt must ask for complexity analysis
-      RuntimeError         → edge cases unhandled; Critic/Debugger cycle may need enabling
+      AssertionError       → reasoning/logic gap in code generation (add chain-of-thought)
+      SyntaxError          → markdown fences not stripped, or LLM generating prose instead of code
+      ModuleNotFoundError  → package not installed in sandbox; must auto-install before running code
+      ImportError          → same as ModuleNotFoundError
+      TimeoutError         → generated code has poor complexity; prompt must ask for complexity analysis
+      RuntimeError         → edge cases unhandled; review/debug cycle may need enabling
 
-Write a concise improvement plan (plain text, no code, max 300 words) that explains:
-1. What SYSTEMIC weaknesses the error-type distribution reveals
-2. Which architectural files need to change (agent prompts, topology config, pipeline logic)
-3. What general pass-rate improvement is expected in Generation {next_gen}
+Write a structured improvement plan with these EXACT sections:
+
+## FAILURE ANALYSIS
+What systemic weaknesses the error-type distribution reveals (2-3 sentences).
+
+## TOPOLOGY DECISION
+How many pipeline stages/agents you are designing for Generation {next_gen}, what each one is
+responsible for, and WHY this topology addresses the observed failures.
+Explain: why this number of agents, why this order, which stages can be skipped/looped.
+
+## INSTRUCTION CHANGES
+For each pipeline stage, what specific instruction change you are making compared to a naive
+approach, and why that change addresses a failure pattern from the statistics above.
+
+## EXPECTED IMPROVEMENT
+What pass-rate improvement you expect in Generation {next_gen} and why.
 
 ARCHITECTURE CONSTRAINTS (must be preserved):
 - Pipeline uses LangGraph StateGraph (langgraph>=0.2.0); do NOT revert to custom loops
@@ -247,7 +290,49 @@ EVOLUTION ENGINE REQUIREMENT (critical — the plan you write must carry this fo
   4. Place offspring as a sibling directory (same level), never nested inside the parent """
 
         response = self.llm_client.call(prompt)
-        return response.strip()[:1500]
+        full_plan = response.strip()
+
+        # Parse structured sections for audit trail
+        self._last_plan_sections = self._parse_plan_sections(full_plan)
+
+        return full_plan[:1500]  # truncated for inline use; full saved in artifacts
+
+    def _parse_plan_sections(self, plan_text: str) -> dict:
+        """
+        Parse the structured improvement plan into named sections.
+        Sections are ## HEADING format. Missing sections get empty string.
+        """
+        sections = {
+            "failure_analysis": "",
+            "topology_decision": "",
+            "instruction_changes": "",
+            "expected_improvement": "",
+            "raw": plan_text,
+        }
+        current_key = None
+        current_lines = []
+        key_map = {
+            "FAILURE ANALYSIS":    "failure_analysis",
+            "TOPOLOGY DECISION":   "topology_decision",
+            "INSTRUCTION CHANGES": "instruction_changes",
+            "EXPECTED IMPROVEMENT":"expected_improvement",
+        }
+        for line in plan_text.splitlines():
+            stripped = line.strip()
+            matched = False
+            for heading, key in key_map.items():
+                if stripped.startswith("##") and heading in stripped.upper():
+                    if current_key:
+                        sections[current_key] = "\n".join(current_lines).strip()
+                    current_key = key
+                    current_lines = []
+                    matched = True
+                    break
+            if not matched and current_key:
+                current_lines.append(line)
+        if current_key:
+            sections[current_key] = "\n".join(current_lines).strip()
+        return sections
 
     # ── Phase 2: Per-file generation ──────────────────────────────────────────
 
