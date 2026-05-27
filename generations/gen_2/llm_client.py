@@ -127,9 +127,11 @@ def _check_ollama_reachable() -> bool:
 
 class LLMClient:
     """
-    Unified LLM client with 6-provider fallback chain.
-    Priority: Cerebras → SambaNova → Groq → OpenRouter → Gemini → Ollama (CPU emergency)
-    Fastest/least-limited API first; local CPU Ollama only when all cloud providers exhausted.
+    Unified LLM client with multi-provider fallback chain.
+
+    ON KAGGLE:     Kaggle GPU model (Qwen shim) → Cerebras → SambaNova → Groq → OpenRouter → Gemini
+    NOT ON KAGGLE: Cerebras → SambaNova → Groq → OpenRouter → Gemini → Ollama (CPU last resort)
+
     Switches instantly on rate limit — never waits when another provider is available.
     """
 
@@ -319,22 +321,36 @@ class LLMClient:
 
     def _build_fallback_chain(self) -> List[str]:
         """
-        Sorted by: max speed + least limited (combined score).
+        Provider priority — Kaggle GPU model always first when running on Kaggle.
 
-          1. Cerebras   — 2000 tok/s + least limited  ← BEST
-          2. SambaNova  — 1500 tok/s + generous
-          3. Groq       —  800 tok/s + rolling TPM
-          4. OpenRouter —  200 tok/s + soft limits    (slow but free)
-          5. Gemini     —  400 tok/s + most limited
-          6. Ollama     —    ~2 tok/s CPU              (emergency, 32 GB CPU only)
+        ON KAGGLE (KAGGLE_DATA_PROXY_TOKEN or KAGGLE_KERNEL_RUN_TYPE env vars are set):
+          1. Kaggle GPU model (Qwen2.5-Coder via shim) — ~40 tok/s, no rate limits  ← FIRST
+          2. Cerebras    — cloud fallback if Kaggle model fails
+          3. SambaNova
+          4. Groq
+          5. OpenRouter
+          6. Gemini
+
+        NOT ON KAGGLE (cloud-only):
+          1. Cerebras → SambaNova → Groq → OpenRouter → Gemini
+          6. Ollama   — CPU emergency only (~2 tok/s, last resort)
         """
+        import os
+        on_kaggle = bool(
+            os.environ.get("KAGGLE_DATA_PROXY_TOKEN")   # auto-set by Kaggle runtime
+            or os.environ.get("KAGGLE_KERNEL_RUN_TYPE") # auto-set by Kaggle runtime
+        )
+
         chain = []
-        if _CEREBRAS_API_KEY:   chain.extend(_CEREBRAS_MODELS)    # 1. 2000 tok/s, least limited
-        if _SAMBANOVA_API_KEY:  chain.extend(_SAMBANOVA_MODELS)   # 2. 1500 tok/s, generous
-        if _GROQ_API_KEY:       chain.extend(_GROQ_MODELS)        # 3.  800 tok/s, rolling TPM
-        if _OPENROUTER_API_KEY: chain.extend(_OPENROUTER_MODELS)  # 4.  200 tok/s, soft limits
-        if _GEMINI_API_KEY:     chain.extend(_GEMINI_MODELS)      # 5.  400 tok/s, most restricted
-        if self._use_ollama:    chain.append(self._ollama_model)  # 6.   ~2 tok/s, CPU emergency
+        if self._use_ollama and on_kaggle:
+            chain.append(self._ollama_model)            # 1. Kaggle GPU model — first
+        if _CEREBRAS_API_KEY:   chain.extend(_CEREBRAS_MODELS)
+        if _SAMBANOVA_API_KEY:  chain.extend(_SAMBANOVA_MODELS)
+        if _GROQ_API_KEY:       chain.extend(_GROQ_MODELS)
+        if _OPENROUTER_API_KEY: chain.extend(_OPENROUTER_MODELS)
+        if _GEMINI_API_KEY:     chain.extend(_GEMINI_MODELS)
+        if self._use_ollama and not on_kaggle:
+            chain.append(self._ollama_model)            # last: CPU emergency (non-Kaggle)
         return chain
 
     # ── Qwen3 thinking mode ───────────────────────────────────────────────────
