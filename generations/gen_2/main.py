@@ -546,6 +546,32 @@ if __name__ == "__main__":
     gen_config = Config()
     setup_logging(gen_config.log_level, current_gen_dir / "generation.log")
 
+    # Read the DNA packet written by our parent at birth time.
+    # dna.json is the umbilical cord — it tells us what we were designed to improve.
+    # Absent for Generation 1 (no parent) — that's expected and harmless.
+    _dna_path = current_gen_dir / "dna.json"
+    if _dna_path.exists():
+        try:
+            _dna = json.loads(_dna_path.read_text(encoding="utf-8"))
+            logger.info(
+                f"[DNA] Reading parent DNA packet — "
+                f"parent_pass_rate={_dna.get('parent_pass_rate')}, "
+                f"parent_generation={_dna.get('parent_generation')}"
+            )
+            logger.info(f"[DNA] Improvement goals: {str(_dna.get('improvement_goals', ''))[:200]}")
+            # Propagate parent stats into config so evolution engine can access them
+            if not getattr(gen_config, "parent_pass_rate", None):
+                gen_config.parent_pass_rate = _dna.get("parent_pass_rate")
+            if not getattr(gen_config, "parent_error_types", None):
+                gen_config.parent_error_types = _dna.get("error_breakdown", {})
+        except Exception as _dna_err:
+            logger.warning(f"[DNA] Failed to read dna.json (non-fatal): {_dna_err}")
+    else:
+        logger.info(
+            f"[DNA] No dna.json found in {current_gen_dir} — "
+            "this is expected for Generation 1 (no parent exists yet)."
+        )
+
     try:
         run_generation(gen_config, args.generation)
     except Exception as main_exc:

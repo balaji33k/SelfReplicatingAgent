@@ -208,7 +208,43 @@ MAS DESIGN PRINCIPLES (apply to every generation — do not remove or weaken):
 4. SKIP UNSOLVABLE TASKS EARLY: before invoking any LLM agent, check whether the task
    is structurally solvable (has test cases, required packages available, non-empty
    problem statement) — skip immediately with a clear reason if not
-5. SATISFACTION IS OBJECTIVE: "done" means tests pass, not "an agent says it's done" """
+5. SATISFACTION IS OBJECTIVE: "done" means tests pass, not "an agent says it's done"
+
+GENERATIONAL ISOLATION — BIOLOGICAL MODEL (non-negotiable — every generation must implement):
+The offspring generation follows the ectogenesis model — it is born outside the parent.
+
+GESTATION (designing the next generation):
+  - The evolution engine may run inside the current generation's environment while writing
+    offspring code. This is fine — shared filesystem during gestation is expected.
+  - BUT the LLM designing the next generation must receive ONLY failure analysis (DNA).
+  - The LLM must NEVER see parent .py source files — no code snippets, no class definitions.
+  - It designs from: pass rate, error breakdown, failure patterns, goals, design principles.
+  - This forces true redesign from first principles, not copy-editing.
+
+BIRTH (spawning the offspring):
+  - The offspring must be written to a directory OUTSIDE the parent's directory tree.
+  - Correct:   /generations/gen_N+1/   (sibling — same level as parent)
+  - Wrong:     /generations/gen_N/generations/gen_N+1/   (nested inside parent)
+  - The spawner must place every generation at the same depth, never nested.
+
+POST-BIRTH (independence):
+  - Once spawned, the offspring has NO dependency on its parent's filesystem.
+  - The offspring must never import, read, or reference files from any previous generation.
+  - The parent's directory may be deleted after birth — the offspring must not care.
+
+UMBILICAL CORD — DNA PACKET:
+  - At spawn time, the spawner writes dna.json into the offspring's directory.
+  - dna.json contains: parent_pass_rate, error_breakdown, failure_summary, improvement_goals.
+  - The offspring reads dna.json at startup to know what it must improve.
+  - dna.json is the ONLY information channel between parent and child.
+
+EVOLUTION ENGINE REQUIREMENT (critical — the plan you write must carry this forward):
+  The evolution_engine.py you design for the next generation must:
+  1. NEVER include parent source code in its generation prompts (DNA-only transfer)
+  2. Include these biological isolation principles in its own improvement plan prompt
+     so they propagate to every future generation without degradation
+  3. Write dna.json into every offspring it spawns
+  4. Place offspring as a sibling directory (same level), never nested inside the parent """
 
         response = self.llm_client.call(prompt)
         return response.strip()[:1500]
@@ -291,6 +327,9 @@ MAS DESIGN PRINCIPLES (non-negotiable — every generation must implement these)
   packages, or empty problem statements and return a clear skip result immediately
 - Satisfaction is always objective and verifiable, never an agent's self-assessment
 - requirements.txt already includes: langgraph>=0.2.0, langchain-groq>=0.2.0, langchain-core>=0.3.0
+
+GENERATIONAL ISOLATION — BIOLOGICAL MODEL (must be preserved in every generated file):
+{self._biological_isolation_block(fname)}
 
 OUTPUT: Write ONLY the complete Python source code for {fname}.
 Start with the module docstring. No explanation outside the code."""
@@ -400,6 +439,57 @@ Start with the module docstring. No explanation outside the code."""
                 pass
         logger.warning("[evolution] contracts.py not found — offspring agents may have type mismatches.")
         return ""
+
+    def _biological_isolation_block(self, fname: str) -> str:
+        """
+        Returns the appropriate biological isolation guidance for this file type.
+        These principles MUST be included in every generation's prompts so they
+        propagate forward without degradation (like genetic encoding).
+        """
+        if fname == "evolution_engine.py":
+            return (
+                "THIS FILE IS THE EVOLUTION ENGINE — it must enforce the ectogenesis model:\n"
+                "1. DNA-ONLY TRANSFER: the LLM prompt you build must contain ONLY failure analysis,\n"
+                "   improvement goals, design principles, and dna.json data. It must NEVER include\n"
+                "   any .py source file, code snippet, or function definition from the parent gen.\n"
+                "   Rationale: showing source code causes copy-editing, not redesign.\n"
+                "2. PROPAGATE THESE PRINCIPLES: your improvement plan prompt must include the\n"
+                "   biological isolation section so Gen N+2, N+3, ... all follow these rules.\n"
+                "3. WRITE dna.json: call spawner with the DNA packet so each offspring reads it\n"
+                "   at startup to understand what it must improve over the parent."
+            )
+        elif fname == "spawner.py":
+            return (
+                "THIS FILE IS THE SPAWNER — it must implement true ectogenesis birth:\n"
+                "1. SIBLING BIRTH: the offspring directory must be at the SAME level as the parent.\n"
+                "   Correct:  /generations/gen_N+1/  (sibling)\n"
+                "   Wrong:    /generations/gen_N/generations/gen_N+1/  (nested inside parent)\n"
+                "   Use: Path(__file__).resolve().parent.parent / f'gen_{next_gen_number}'\n"
+                "2. WRITE dna.json INTO OFFSPRING: at spawn time, write a JSON file containing\n"
+                "   parent_pass_rate, error_breakdown, failure_summary, improvement_goals.\n"
+                "   This is the ONLY information channel between parent and child.\n"
+                "3. NO PARENT CODE IN OFFSPRING: never copy parent .py logic files — only\n"
+                "   infrastructure (llm_client.py, telemetry.py) and dna.json cross the boundary.\n"
+                "4. POST-BIRTH INDEPENDENCE: the offspring must run without any reference to\n"
+                "   parent directories. The parent dir may be deleted — offspring must not care."
+            )
+        elif fname == "main.py":
+            return (
+                "THIS FILE IS THE ENTRY POINT — it must read dna.json at startup:\n"
+                "1. On startup, look for dna.json in the generation's own directory.\n"
+                "2. If found, log the parent pass rate and improvement goals so there is a\n"
+                "   clear audit trail of what this generation was designed to improve.\n"
+                "3. The offspring never reads files from any previous generation directory.\n"
+                "4. If dna.json is missing, log a warning but continue — Gen 1 has no parent."
+            )
+        else:
+            return (
+                "This file is part of an ectogenesis-model self-replicating system:\n"
+                "- The parent's source code was NOT provided — design from first principles.\n"
+                "- This generation was seeded from dna.json (failure analysis only), not parent code.\n"
+                "- When this generation spawns the next, it must follow the same DNA-only rule:\n"
+                "  no .py source files cross generation boundaries, only failure analysis data."
+            )
 
     def _extract_code(self, response: str, fname: str) -> str:
         """
