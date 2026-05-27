@@ -150,7 +150,11 @@ class EvolutionEngine:
                 except Exception:
                     pass
             if i < len(REQUIRED_FILES) - 1:
-                time.sleep(INTER_FILE_DELAY)
+                # No delay needed for local GPU model (Kaggle) — delay only for cloud API rate limits
+                import os
+                on_kaggle = bool(os.environ.get("KAGGLE_DATA_PROXY_TOKEN") or os.environ.get("KAGGLE_KERNEL_RUN_TYPE"))
+                if not on_kaggle:
+                    time.sleep(INTER_FILE_DELAY)
 
         missing = [f for f in REQUIRED_FILES if f not in files]
         if missing:
