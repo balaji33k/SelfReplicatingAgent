@@ -31,14 +31,12 @@ logger = logging.getLogger(__name__)
 # These are always copied from the parent generation by spawner.py.
 INFRA_FILES = {"telemetry.py", "lineage_memory.py", "llm_client.py"}
 
-# Files the LLM must generate for every offspring.
-REQUIRED_FILES = [
+# Core orchestration files the LLM MUST always generate — these are the minimum
+# needed to run and evolve. Agent/pipeline files beyond this are decided by the LLM.
+# The LLM declares its full file manifest in the planning phase (## FILE MANIFEST section).
+CORE_FILES = [
     "main.py", "config.py", "task_manager.py",
     "analysis.py", "evolution_engine.py", "spawner.py",
-    "contracts.py", "agent_base.py", "pipeline.py",
-    "agent_analyst.py", "agent_architect.py", "agent_coder.py",
-    "agent_critic.py", "agent_reviser.py", "agent_test_writer.py",
-    "agent_debugger.py", "agent_clone_inspector.py",
 ]
 
 # Delay between per-file LLM calls to stay inside TPM budget (seconds)
@@ -96,19 +94,27 @@ class EvolutionEngine:
         # to prevent indirect copying of parent logic.
         contracts_spec = self._load_contracts_spec()
 
-        # Phase 1: Improvement plan
+        # Phase 1: Improvement plan (includes FILE MANIFEST — LLM declares what files it will generate)
         self._last_plan_sections = {}
         improvement_log = self._get_improvement_plan(failure_ctx, gen_num, next_gen)
         plan_sections = getattr(self, "_last_plan_sections", {})
         logger.info(f"Improvement plan: {improvement_log[:120]}...")
         logger.info(f"Topology decision: {plan_sections.get('topology_decision', '')[:120]}...")
 
+        # Build dynamic file list: core files + any additional files the LLM declared
+        llm_manifest = self._parse_file_manifest(plan_sections.get("file_manifest", ""))
+        all_files = list(CORE_FILES)
+        for f in llm_manifest:
+            if f not in all_files and f.endswith(".py") and f not in INFRA_FILES:
+                all_files.append(f)
+        logger.info(f"File manifest: {all_files} ({len(all_files)} files)")
+
         # Notify caller as soon as the plan is ready (before any files are generated)
         if plan_callback:
             try:
                 plan_callback("plan_ready", {
                     "plan": improvement_log,
-                    "files_total": len(REQUIRED_FILES),
+                    "files_total": len(all_files),
                     "failure_summary": {
                         "pass_rate": analysis_report.pass_rate,
                         "passed": analysis_report.passed,
@@ -124,8 +130,8 @@ class EvolutionEngine:
         # Phase 2: Generate each file — NO parent code shown, only the plan + stats
         files: Dict[str, str] = {}
         file_notes: Dict[str, str] = {}   # per-file generation notes for audit trail
-        for i, fname in enumerate(REQUIRED_FILES):
-            logger.info(f"  Generating [{i+1}/{len(REQUIRED_FILES)}]: {fname}")
+        for i, fname in enumerate(all_files):
+            logger.info(f"  Generating [{i+1}/{len(all_files)}]: {fname}")
             content = self._generate_one_file(
                 fname=fname,
                 improvement_log=improvement_log,
@@ -145,20 +151,20 @@ class EvolutionEngine:
                     plan_callback("file_done", {
                         "file": fname,
                         "index": i + 1,
-                        "total": len(REQUIRED_FILES),
+                        "total": len(all_files),
                     })
                 except Exception:
                     pass
-            if i < len(REQUIRED_FILES) - 1:
+            if i < len(all_files) - 1:
                 # No delay needed for local GPU model (Kaggle) — delay only for cloud API rate limits
                 import os
                 on_kaggle = bool(os.environ.get("KAGGLE_DATA_PROXY_TOKEN") or os.environ.get("KAGGLE_KERNEL_RUN_TYPE"))
                 if not on_kaggle:
                     time.sleep(INTER_FILE_DELAY)
 
-        missing = [f for f in REQUIRED_FILES if f not in files]
+        missing = [f for f in CORE_FILES if f not in files]
         if missing:
-            raise RuntimeError(f"Evolution incomplete — missing files: {missing}")
+            raise RuntimeError(f"Evolution incomplete — missing core files: {missing}")
 
         # Build full evolution artifact — saved to offspring dir by spawner
         import datetime as _dt
@@ -171,6 +177,7 @@ class EvolutionEngine:
             "instruction_changes": plan_sections.get("instruction_changes", ""),
             "expected_improvement": plan_sections.get("expected_improvement", ""),
             "full_improvement_plan": plan_sections.get("raw", improvement_log),
+            "file_manifest": all_files,
             "files_generated": list(files.keys()),
             "file_notes": file_notes,
             "failure_stats": {
@@ -230,6 +237,22 @@ What systemic weaknesses the error-type distribution reveals (2-3 sentences).
 How many pipeline stages/agents you are designing for Generation {next_gen}, what each one is
 responsible for, and WHY this topology addresses the observed failures.
 Explain: why this number of agents, why this order, which stages can be skipped/looped.
+You decide the topology — do not feel constrained to any prior agent names or count.
+
+## FILE MANIFEST
+List every .py file you will generate for Generation {next_gen}, one per line, format: filename.py
+REQUIRED core files (always include): main.py, config.py, task_manager.py, analysis.py, evolution_engine.py, spawner.py
+Additional files: list any pipeline/agent/utility files you design — use whatever names fit your topology.
+Example (your actual files may differ):
+  main.py
+  config.py
+  task_manager.py
+  analysis.py
+  evolution_engine.py
+  spawner.py
+  pipeline.py
+  agent_solver.py
+  agent_verifier.py
 
 ## INSTRUCTION CHANGES
 For each pipeline stage, what specific instruction change you are making compared to a naive
@@ -239,9 +262,11 @@ approach, and why that change addresses a failure pattern from the statistics ab
 What pass-rate improvement you expect in Generation {next_gen} and why.
 
 ARCHITECTURE CONSTRAINTS (must be preserved):
-- Pipeline uses LangGraph StateGraph (langgraph>=0.2.0); do NOT revert to custom loops
-- LLM client uses ChatGroq (langchain-groq) — llm_client.py is infra, copied automatically
-- Model: meta-llama/llama-4-scout-17b-16e-instruct on Groq (30k TPM / 500k TPD)
+- llm_client.py is INFRASTRUCTURE — copied automatically, do NOT regenerate it
+- The LLM client is already configured — use it as-is in your agents
+- You decide the pipeline topology (number of agents, their roles, their order)
+- You decide what frameworks or patterns to use (state machine, DAG, custom loop, etc.)
+- Core files (main.py, config.py, task_manager.py, analysis.py, evolution_engine.py, spawner.py) are always required
 
 MAS DESIGN PRINCIPLES (apply to every generation — do not remove or weaken):
 1. LOOPS must have TWO exit conditions:
@@ -309,6 +334,7 @@ EVOLUTION ENGINE REQUIREMENT (critical — the plan you write must carry this fo
         sections = {
             "failure_analysis": "",
             "topology_decision": "",
+            "file_manifest": "",
             "instruction_changes": "",
             "expected_improvement": "",
             "raw": plan_text,
@@ -318,6 +344,7 @@ EVOLUTION ENGINE REQUIREMENT (critical — the plan you write must carry this fo
         key_map = {
             "FAILURE ANALYSIS":    "failure_analysis",
             "TOPOLOGY DECISION":   "topology_decision",
+            "FILE MANIFEST":       "file_manifest",
             "INSTRUCTION CHANGES": "instruction_changes",
             "EXPECTED IMPROVEMENT":"expected_improvement",
         }
@@ -337,6 +364,29 @@ EVOLUTION ENGINE REQUIREMENT (critical — the plan you write must carry this fo
         if current_key:
             sections[current_key] = "\n".join(current_lines).strip()
         return sections
+
+    def _parse_file_manifest(self, manifest_text: str) -> List[str]:
+        """
+        Extract a list of .py filenames from the ## FILE MANIFEST section.
+        Accepts any line containing 'filename.py' — strips bullets, whitespace.
+        Returns only valid .py filenames that are not infra files.
+        Falls back to an empty list if the section is missing/malformed
+        (CORE_FILES will still be generated in that case).
+        """
+        files = []
+        for line in manifest_text.splitlines():
+            # Extract token that looks like a python filename
+            import re
+            m = re.search(r'\b([\w]+\.py)\b', line)
+            if m:
+                fname = m.group(1)
+                if fname not in INFRA_FILES and fname not in files:
+                    files.append(fname)
+        if files:
+            logger.info(f"[manifest] LLM declared {len(files)} files: {files}")
+        else:
+            logger.warning("[manifest] LLM did not provide a FILE MANIFEST — using CORE_FILES only")
+        return files
 
     # ── Phase 2: Per-file generation ──────────────────────────────────────────
 
@@ -395,13 +445,10 @@ REQUIREMENTS:
 - File: {fname}  Generation: {next_gen}
 - Address the SYSTEMIC failure patterns shown in the statistics above
 - llm_client.py is INFRASTRUCTURE — do NOT generate it; it is copied automatically
-- LLMClient uses ChatGroq (langchain-groq), reads GROQ_API_KEY from env, max_retries=7
-- Default Groq model: meta-llama/llama-4-scout-17b-16e-instruct (30k TPM / 500k TPD)
-- pipeline.py MUST use LangGraph (langgraph.graph.StateGraph) — NOT custom loops
-  • from langgraph.graph import StateGraph, START, END
-  • PipelineState as TypedDict; conditional edges for critic/debug cycles
-  • Compile once in __init__; stream with stream_mode="updates" in solve()
-- Every agent file must own its prompt internally
+- Use the LLMClient class (from llm_client import LLMClient) to make all LLM calls
+- Every agent file must own its prompt and logic internally
+- You choose the pipeline topology and framework — use whatever design best addresses failures
+- No external frameworks are mandated — design from first principles
 
 MAS DESIGN PRINCIPLES (non-negotiable — every generation must implement these):
 - Every loop needs TWO exits: (a) objective satisfaction signal — e.g. tests pass,
@@ -409,13 +456,11 @@ MAS DESIGN PRINCIPLES (non-negotiable — every generation must implement these)
   count ceiling to prevent infinite loops when the goal is unreachable
 - No-progress detection: if a loop produces the same failure as the previous iteration,
   exit that loop immediately — repeated identical failures mean the agent is stuck
-- Parallel branches: where sub-tasks are independent (e.g. generating multiple candidate
-  solutions), design them to run concurrently; converge on the first that satisfies the
-  objective condition rather than running sequentially and taking the last result
+- Parallel branches: where sub-tasks are independent, design them to run concurrently;
+  converge on the first result that satisfies the objective condition
 - Skip unsolvable tasks before any LLM call: check for missing test cases, unavailable
   packages, or empty problem statements and return a clear skip result immediately
 - Satisfaction is always objective and verifiable, never an agent's self-assessment
-- requirements.txt already includes: langgraph>=0.2.0, langchain-groq>=0.2.0, langchain-core>=0.3.0
 
 GENERATIONAL ISOLATION — BIOLOGICAL MODEL (must be preserved in every generated file):
 {self._biological_isolation_block(fname)}
@@ -434,23 +479,17 @@ Start with the module docstring. No explanation outside the code."""
         their purpose from the improvement plan.
         """
         roles = {
-            "main.py":              "Entry point — loads tasks, runs pipeline, triggers evolution",
-            "config.py":            "Configuration — AgentTopologyConfig, LLMConfig, model defaults",
+            # Core orchestration files — always generated
+            "main.py":              "Entry point — loads tasks, runs pipeline, triggers evolution and spawn",
+            "config.py":            "Configuration — LLMConfig, model defaults, generation metadata",
             "task_manager.py":      "Task loading from problem_pool.json",
-            "analysis.py":          "Failure analysis — classifies errors, attributes to agents",
+            "analysis.py":          "Failure analysis — classifies errors, computes pass rate, attributes failures",
             "evolution_engine.py":  "Evolution — gets improvement plan + file manifest from LLM, generates each file",
-            "spawner.py":           "Spawner — validates core files present, writes offspring, launches next gen",
-            "contracts.py":         "Data contracts — typed dataclasses between agents",
-            "agent_base.py":        "Base class for all specialist agents",
-            "pipeline.py":          "AgentPipeline — LangGraph StateGraph (langgraph>=0.2.0); PipelineState TypedDict; conditional edges for critic/debug cycles; stream_mode='updates'",
-            "agent_analyst.py":     "Analyst agent — decomposes problem into AnalysisSpec",
-            "agent_architect.py":   "Architect agent — designs solution as DesignSpec",
-            "agent_coder.py":       "Coder agent — generates working Python code; use chain-of-thought",
-            "agent_critic.py":      "Critic agent — reviews code against spec (not design intent)",
-            "agent_reviser.py":     "Reviser agent — applies Critic's targeted fixes only",
-            "agent_test_writer.py": "TestWriter agent — generates tests from AnalysisSpec ONLY",
-            "agent_debugger.py":    "Debugger agent — patches exact failure, no redesign",
-            "agent_clone_inspector.py": "Clone Inspector — detects if offspring files copy parent",
+            "spawner.py":           "Spawner — validates core files present, writes offspring dir, launches next gen",
+            # Common pipeline/agent files (may or may not exist in this topology)
+            "pipeline.py":          "Pipeline orchestrator — coordinates agent execution per the topology decision",
+            "contracts.py":         "Data contracts — shared typed structures between pipeline stages",
+            "agent_base.py":        "Base class for pipeline agents",
         }
         # For any new file the LLM decided to add (not in the known list),
         # infer its role from the filename rather than returning a generic stub.
