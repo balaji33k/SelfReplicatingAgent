@@ -348,7 +348,18 @@ class Spawner:
         return next_gen_dir
 
     def launch_next_generation(self, next_gen_dir: Path) -> None:
-        """Launch main.py of the next generation as an independent process."""
+        """Launch main.py of the next generation as an independent process.
+
+        If NO_AUTO_LAUNCH=1 is set in the environment, skip the launch so an
+        external supervisor (e.g. a Kaggle notebook loop) can control sequencing.
+        """
+        if os.environ.get("NO_AUTO_LAUNCH"):
+            logger.info(
+                f"NO_AUTO_LAUNCH=1 — skipping auto-launch of {next_gen_dir.name}. "
+                "Supervisor will start it."
+            )
+            return
+
         main_script = next_gen_dir / "main.py"
         if not main_script.exists():
             raise FileNotFoundError(f"main.py not found in {next_gen_dir}")
