@@ -54,8 +54,10 @@ def main():
     logger.info(f"Loaded {len(all_results)} existing task results")
 
     # ── Re-run failure analysis ───────────────────────────────────────
+    # Pass empty tasks list — we only have results, not the original task objects.
+    # analyze_results uses tasks only to detect pre-execution gaps; empty is safe here.
     analyzer = FailureAnalyzer()
-    analysis_report = analyzer.analyze(all_results)
+    analysis_report = analyzer.analyze_results(all_results, [])
     logger.info(
         f"Analysis: {analysis_report.passed}/{analysis_report.total_tasks} passed "
         f"({analysis_report.pass_rate:.1%})"
