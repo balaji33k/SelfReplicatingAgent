@@ -24,8 +24,8 @@ generations/*/child_generation.log
 generations/*/results/
 generations/gen_*/results/
 
-# Spawned generations beyond gen_1 (they are created at runtime)
-generations/gen_2/
+# Spawned generations beyond gen_2 (they are created at runtime)
+# gen_2 is tracked so its fixed spawner.py/evolution_engine.py reach Kaggle for respawn
 generations/gen_3/
 generations/gen_4/
 generations/gen_5/
