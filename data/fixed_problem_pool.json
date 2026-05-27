@@ -1,39 +1,252 @@
-{
-    "training": {
-        "swe": [
-            {
-                "id": "SWE-SKLEARN-10558",
-                "difficulty": "Hard",
-                "repo": "scikit-learn/scikit-learn",
-                "problem_statement": "Deprecate the 'axis' parameter in SimpleImputer. Currently, SimpleImputer supports an 'axis' parameter (legacy from Imputer) which was used to specify whether to impute along rows or columns. However, modern sklearn transformers should only work on samples (rows) and shouldn't have an axis parameter. Implement a deprecation warning if axis=1 is passed and ensure functionality remains consistent with axis=0 by default.",
-                "test_cases": "1. Initialize SimpleImputer(axis=1) and check for DeprecationWarning. 2. Verify that SimpleImputer works correctly with default settings on a 2D array with NaNs."
-            },
-            {
-                "id": "SWE-DJANGO-31514",
-                "difficulty": "Hard",
-                "repo": "django/django",
-                "problem_statement": "QuerySet.union() fails when using slicing. When combining two sliced querysets using union(), the resulting SQL should respect the limits and offsets of the individual querysets. Currently, some database backends (like SQLite) might ignore the slicing when combined. Implement a check or a wrapper to ensure sliced querysets are treated as subqueries during a union operation.",
-                "test_cases": "1. Create two sliced querysets. 2. Call union() on them. 3. Verify the result count matches the sum of the individual slice limits."
-            },
-            {
-                "id": "SWE-SYMPY-13471",
-                "difficulty": "Hard",
-                "repo": "sympy/sympy",
-                "problem_statement": "simplify() fails on complex nested exponentials. Given an expression like exp(exp(x))/exp(x), common simplification rules should reduce this if possible or at least handle the nested structure without a RecursionError. Implement a more robust expansion for nested exponentials in the simplify() core.",
-                "test_cases": "1. simplify(exp(exp(x))/exp(x)) should not error. 2. verify basic simplification of exp(a)*exp(b) -> exp(a+b)."
-            }
-        ],
-        "lcb": [
-            {
-                "id": "LCB-HARD-001",
-                "difficulty": "Competition",
-                "problem_statement": "Find the maximum sum of a non-adjacent subsequence in a circular array. Given an array of integers representing house values on a circular street, find the maximum amount of money you can rob without alerting the police (cannot rob adjacent houses).",
-                "test_cases": "1. [2,3,2] -> 3. 2. [1,2,3,1] -> 4."
-            }
-        ]
-    },
-    "test": {
-        "swe": [],
-        "lcb": []
-    }
-}
+[
+  {
+    "id": "LCB-001",
+    "difficulty": "Medium",
+    "title": "Two Sum",
+    "problem_statement": "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target. You may assume that each input would have exactly one solution, and you may not use the same element twice. Return the answer in any order.\n\nExample:\n  Input: nums = [2, 7, 11, 15], target = 9\n  Output: [0, 1]\n  Explanation: nums[0] + nums[1] == 9\n\nWrite a function: def two_sum(nums: list, target: int) -> list",
+    "test_cases": [
+      {"input": "nums=[2,7,11,15], target=9",  "expected": "[0, 1]"},
+      {"input": "nums=[3,2,4],     target=6",  "expected": "[1, 2]"},
+      {"input": "nums=[3,3],       target=6",  "expected": "[0, 1]"},
+      {"input": "nums=[1,2,3,4,5], target=9",  "expected": "[3, 4]"}
+    ]
+  },
+  {
+    "id": "LCB-002",
+    "difficulty": "Hard",
+    "title": "Median of Two Sorted Arrays",
+    "problem_statement": "Given two sorted arrays nums1 and nums2 of size m and n respectively, return the median of the two sorted arrays. The overall run time complexity must be O(log(m+n)).\n\nExample:\n  Input: nums1 = [1, 3], nums2 = [2]\n  Output: 2.0\n\nWrite a function: def find_median_sorted_arrays(nums1: list, nums2: list) -> float",
+    "test_cases": [
+      {"input": "nums1=[1,3], nums2=[2]",     "expected": "2.0"},
+      {"input": "nums1=[1,2], nums2=[3,4]",   "expected": "2.5"},
+      {"input": "nums1=[0,0], nums2=[0,0]",   "expected": "0.0"},
+      {"input": "nums1=[], nums2=[1]",         "expected": "1.0"},
+      {"input": "nums1=[2], nums2=[]",         "expected": "2.0"}
+    ]
+  },
+  {
+    "id": "LCB-003",
+    "difficulty": "Medium",
+    "title": "Longest Substring Without Repeating Characters",
+    "problem_statement": "Given a string s, find the length of the longest substring without repeating characters.\n\nExample:\n  Input: s = 'abcabcbb'\n  Output: 3  (the substring is 'abc')\n\nWrite a function: def length_of_longest_substring(s: str) -> int",
+    "test_cases": [
+      {"input": "s='abcabcbb'", "expected": "3"},
+      {"input": "s='bbbbb'",    "expected": "1"},
+      {"input": "s='pwwkew'",   "expected": "3"},
+      {"input": "s=''",         "expected": "0"},
+      {"input": "s='au'",       "expected": "2"}
+    ]
+  },
+  {
+    "id": "LCB-004",
+    "difficulty": "Medium",
+    "title": "Valid Parentheses",
+    "problem_statement": "Given a string s containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid. An input string is valid if: open brackets are closed by the same type of brackets, and open brackets are closed in the correct order.\n\nWrite a function: def is_valid(s: str) -> bool",
+    "test_cases": [
+      {"input": "s='()'",      "expected": "True"},
+      {"input": "s='()[]{}'",  "expected": "True"},
+      {"input": "s='(]'",      "expected": "False"},
+      {"input": "s='([)]'",    "expected": "False"},
+      {"input": "s='{[]}'",    "expected": "True"},
+      {"input": "s=''",        "expected": "True"}
+    ]
+  },
+  {
+    "id": "LCB-005",
+    "difficulty": "Medium",
+    "title": "Maximum Subarray",
+    "problem_statement": "Given an integer array nums, find the subarray with the largest sum, and return its sum.\n\nExample:\n  Input: nums = [-2, 1, -3, 4, -1, 2, 1, -5, 4]\n  Output: 6  (subarray [4, -1, 2, 1])\n\nWrite a function: def max_sub_array(nums: list) -> int",
+    "test_cases": [
+      {"input": "nums=[-2,1,-3,4,-1,2,1,-5,4]", "expected": "6"},
+      {"input": "nums=[1]",                       "expected": "1"},
+      {"input": "nums=[5,4,-1,7,8]",              "expected": "23"},
+      {"input": "nums=[-1,-2,-3]",                "expected": "-1"}
+    ]
+  },
+  {
+    "id": "LCB-006",
+    "difficulty": "Medium",
+    "title": "Climbing Stairs",
+    "problem_statement": "You are climbing a staircase. It takes n steps to reach the top. Each time you can either climb 1 or 2 steps. In how many distinct ways can you climb to the top?\n\nExample:\n  Input: n = 3\n  Output: 3  (1+1+1, 1+2, 2+1)\n\nWrite a function: def climb_stairs(n: int) -> int",
+    "test_cases": [
+      {"input": "n=1", "expected": "1"},
+      {"input": "n=2", "expected": "2"},
+      {"input": "n=3", "expected": "3"},
+      {"input": "n=5", "expected": "8"},
+      {"input": "n=10", "expected": "89"}
+    ]
+  },
+  {
+    "id": "LCB-007",
+    "difficulty": "Medium",
+    "title": "Binary Search",
+    "problem_statement": "Given an array of integers nums which is sorted in ascending order, and an integer target, write a function to search target in nums. If target exists, return its index. Otherwise, return -1. You must write an algorithm with O(log n) runtime complexity.\n\nWrite a function: def search(nums: list, target: int) -> int",
+    "test_cases": [
+      {"input": "nums=[-1,0,3,5,9,12], target=9",  "expected": "4"},
+      {"input": "nums=[-1,0,3,5,9,12], target=2",  "expected": "-1"},
+      {"input": "nums=[5], target=5",               "expected": "0"},
+      {"input": "nums=[5], target=6",               "expected": "-1"},
+      {"input": "nums=[1,2,3,4,5], target=1",       "expected": "0"}
+    ]
+  },
+  {
+    "id": "LCB-008",
+    "difficulty": "Medium",
+    "title": "Reverse Linked List",
+    "problem_statement": "Given the head of a singly linked list, reverse the list, and return the reversed list. Represent the linked list as a Python list for simplicity — reverse the list in-place and return it.\n\nExample:\n  Input: head = [1, 2, 3, 4, 5]\n  Output: [5, 4, 3, 2, 1]\n\nWrite a function: def reverse_list(head: list) -> list",
+    "test_cases": [
+      {"input": "head=[1,2,3,4,5]", "expected": "[5, 4, 3, 2, 1]"},
+      {"input": "head=[1,2]",       "expected": "[2, 1]"},
+      {"input": "head=[]",          "expected": "[]"},
+      {"input": "head=[1]",         "expected": "[1]"}
+    ]
+  },
+  {
+    "id": "LCB-009",
+    "difficulty": "Medium",
+    "title": "Merge Two Sorted Lists",
+    "problem_statement": "You are given the heads of two sorted integer lists list1 and list2. Merge the two lists into one sorted list. Return the merged list as a sorted Python list.\n\nExample:\n  Input: list1 = [1, 2, 4], list2 = [1, 3, 4]\n  Output: [1, 1, 2, 3, 4, 4]\n\nWrite a function: def merge_two_lists(list1: list, list2: list) -> list",
+    "test_cases": [
+      {"input": "list1=[1,2,4], list2=[1,3,4]", "expected": "[1, 1, 2, 3, 4, 4]"},
+      {"input": "list1=[], list2=[]",            "expected": "[]"},
+      {"input": "list1=[], list2=[0]",           "expected": "[0]"},
+      {"input": "list1=[1,3,5], list2=[2,4,6]", "expected": "[1, 2, 3, 4, 5, 6]"}
+    ]
+  },
+  {
+    "id": "LCB-010",
+    "difficulty": "Medium",
+    "title": "Maximum Depth of Binary Tree",
+    "problem_statement": "Given a binary tree represented as a nested list where each node is [value, left, right] (None for missing children), find its maximum depth. The maximum depth is the number of nodes along the longest path from the root node down to the farthest leaf node.\n\nExample:\n  Input: root = [3, [9, None, None], [20, [15, None, None], [7, None, None]]]\n  Output: 3\n\nWrite a function: def max_depth(root) -> int  where root is None or [val, left, right]",
+    "test_cases": [
+      {"input": "root=[3,[9,None,None],[20,[15,None,None],[7,None,None]]]", "expected": "3"},
+      {"input": "root=[1,None,[2,None,None]]",                              "expected": "2"},
+      {"input": "root=None",                                                "expected": "0"},
+      {"input": "root=[1,None,None]",                                      "expected": "1"}
+    ]
+  },
+  {
+    "id": "LCB-011",
+    "difficulty": "Medium",
+    "title": "Number of Islands",
+    "problem_statement": "Given an m x n 2D binary grid which represents a map of '1's (land) and '0's (water), return the number of islands. An island is surrounded by water and is formed by connecting adjacent lands horizontally or vertically.\n\nExample:\n  Input: grid = [[\"1\",\"1\",\"0\"],[\"0\",\"1\",\"0\"],[\"0\",\"0\",\"1\"]]\n  Output: 2\n\nWrite a function: def num_islands(grid: list) -> int",
+    "test_cases": [
+      {"input": "grid=[['1','1','0'],['0','1','0'],['0','0','1']]",                               "expected": "2"},
+      {"input": "grid=[['1','1','1'],['0','1','0'],['1','1','1']]",                               "expected": "1"},
+      {"input": "grid=[['0','0','0'],['0','0','0']]",                                              "expected": "0"},
+      {"input": "grid=[['1','0','1'],['0','0','0'],['1','0','1']]",                               "expected": "4"}
+    ]
+  },
+  {
+    "id": "LCB-012",
+    "difficulty": "Medium",
+    "title": "Coin Change",
+    "problem_statement": "You are given an integer array coins representing coins of different denominations and an integer amount representing a total amount of money. Return the fewest number of coins that you need to make up that amount. If that amount of money cannot be made up by any combination of the coins, return -1.\n\nWrite a function: def coin_change(coins: list, amount: int) -> int",
+    "test_cases": [
+      {"input": "coins=[1,5,11], amount=15", "expected": "3"},
+      {"input": "coins=[1,2,5], amount=11",  "expected": "3"},
+      {"input": "coins=[2],     amount=3",   "expected": "-1"},
+      {"input": "coins=[1],     amount=0",   "expected": "0"},
+      {"input": "coins=[1],     amount=1",   "expected": "1"}
+    ]
+  },
+  {
+    "id": "LCB-013",
+    "difficulty": "Medium",
+    "title": "Longest Common Subsequence",
+    "problem_statement": "Given two strings text1 and text2, return the length of their longest common subsequence. If there is no common subsequence, return 0. A subsequence of a string is a new string generated from the original string with some characters (can be none) deleted without changing the relative order of the remaining characters.\n\nWrite a function: def longest_common_subsequence(text1: str, text2: str) -> int",
+    "test_cases": [
+      {"input": "text1='abcde', text2='ace'",   "expected": "3"},
+      {"input": "text1='abc',   text2='abc'",   "expected": "3"},
+      {"input": "text1='abc',   text2='def'",   "expected": "0"},
+      {"input": "text1='abcba', text2='abcbcba'","expected": "5"}
+    ]
+  },
+  {
+    "id": "LCB-014",
+    "difficulty": "Medium",
+    "title": "Product of Array Except Self",
+    "problem_statement": "Given an integer array nums, return an array answer such that answer[i] is equal to the product of all the elements of nums except nums[i]. The product of any prefix or suffix of nums is guaranteed to fit in a 32-bit integer. You must write an algorithm that runs in O(n) time and without using the division operation.\n\nWrite a function: def product_except_self(nums: list) -> list",
+    "test_cases": [
+      {"input": "nums=[1,2,3,4]",   "expected": "[24, 12, 8, 6]"},
+      {"input": "nums=[-1,1,0,-3,3]","expected": "[0, 0, 9, 0, 0]"},
+      {"input": "nums=[2,3]",        "expected": "[3, 2]"},
+      {"input": "nums=[1,1,1,1]",    "expected": "[1, 1, 1, 1]"}
+    ]
+  },
+  {
+    "id": "LCB-015",
+    "difficulty": "Medium",
+    "title": "Find All Anagrams in a String",
+    "problem_statement": "Given two strings s and p, return an array of all the start indices of p's anagrams in s. An anagram is a word or phrase formed by rearranging the letters of a different word using all the original letters exactly once.\n\nExample:\n  Input: s = 'cbaebabacd', p = 'abc'\n  Output: [0, 6]\n\nWrite a function: def find_anagrams(s: str, p: str) -> list",
+    "test_cases": [
+      {"input": "s='cbaebabacd', p='abc'", "expected": "[0, 6]"},
+      {"input": "s='abab',       p='ab'",  "expected": "[0, 1, 2]"},
+      {"input": "s='aa',         p='bb'",  "expected": "[]"},
+      {"input": "s='baa',        p='aa'",  "expected": "[1]"}
+    ]
+  },
+  {
+    "id": "LCB-016",
+    "difficulty": "Hard",
+    "title": "Word Break",
+    "problem_statement": "Given a string s and a dictionary of strings wordDict, return true if s can be segmented into a space-separated sequence of one or more dictionary words.\n\nExample:\n  Input: s = 'leetcode', wordDict = ['leet', 'code']\n  Output: True\n\nWrite a function: def word_break(s: str, wordDict: list) -> bool",
+    "test_cases": [
+      {"input": "s='leetcode',  wordDict=['leet','code']",          "expected": "True"},
+      {"input": "s='applepenapple', wordDict=['apple','pen']",       "expected": "True"},
+      {"input": "s='catsandog', wordDict=['cats','dog','sand','and','cat']", "expected": "False"},
+      {"input": "s='a',         wordDict=['a']",                     "expected": "True"},
+      {"input": "s='ab',        wordDict=['a','b']",                 "expected": "True"}
+    ]
+  },
+  {
+    "id": "LCB-017",
+    "difficulty": "Medium",
+    "title": "Rotate Array",
+    "problem_statement": "Given an integer array nums, rotate the array to the right by k steps, where k is non-negative. Return the rotated array.\n\nExample:\n  Input: nums = [1,2,3,4,5,6,7], k = 3\n  Output: [5,6,7,1,2,3,4]\n\nWrite a function: def rotate(nums: list, k: int) -> list",
+    "test_cases": [
+      {"input": "nums=[1,2,3,4,5,6,7], k=3", "expected": "[5, 6, 7, 1, 2, 3, 4]"},
+      {"input": "nums=[-1,-100,3,99], k=2",   "expected": "[3, 99, -1, -100]"},
+      {"input": "nums=[1,2], k=3",             "expected": "[2, 1]"},
+      {"input": "nums=[1], k=0",               "expected": "[1]"}
+    ]
+  },
+  {
+    "id": "LCB-018",
+    "difficulty": "Medium",
+    "title": "House Robber",
+    "problem_statement": "You are a professional robber planning to rob houses along a street. Each house has a certain amount of money stashed. The only constraint stopping you from robbing each of them is that adjacent houses have security systems connected and it will automatically contact the police if two adjacent houses were broken into on the same night. Given an integer array nums representing the amount of money of each house, return the maximum amount of money you can rob tonight without alerting the police.\n\nWrite a function: def rob(nums: list) -> int",
+    "test_cases": [
+      {"input": "nums=[1,2,3,1]",   "expected": "4"},
+      {"input": "nums=[2,7,9,3,1]", "expected": "12"},
+      {"input": "nums=[1]",          "expected": "1"},
+      {"input": "nums=[2,1]",        "expected": "2"},
+      {"input": "nums=[0,0,0]",      "expected": "0"}
+    ]
+  },
+  {
+    "id": "LCB-019",
+    "difficulty": "Medium",
+    "title": "Group Anagrams",
+    "problem_statement": "Given an array of strings strs, group the anagrams together. You can return the answer in any order. An anagram is a word or phrase formed by rearranging the letters of a different word using all the original letters exactly once.\n\nExample:\n  Input: strs = ['eat','tea','tan','ate','nat','bat']\n  Output: [['bat'],['nat','tan'],['ate','eat','tea']] (order within groups and order of groups may vary)\n\nWrite a function: def group_anagrams(strs: list) -> list  — return sorted groups for deterministic output",
+    "test_cases": [
+      {"input": "strs=['eat','tea','tan','ate','nat','bat']", "expected": "[['ate', 'eat', 'tea'], ['bat'], ['nat', 'tan']]"},
+      {"input": "strs=['']",                                  "expected": "[['']]"},
+      {"input": "strs=['a']",                                 "expected": "[['a']]"},
+      {"input": "strs=['ab','ba','abc','bca','cab']",         "expected": "[['ab', 'ba'], ['abc', 'bca', 'cab']]"}
+    ]
+  },
+  {
+    "id": "LCB-020",
+    "difficulty": "Hard",
+    "title": "Trapping Rain Water",
+    "problem_statement": "Given n non-negative integers representing an elevation map where the width of each bar is 1, compute how much water it can trap after raining.\n\nExample:\n  Input: height = [0,1,0,2,1,0,1,3,2,1,2,1]\n  Output: 6\n\nWrite a function: def trap(height: list) -> int",
+    "test_cases": [
+      {"input": "height=[0,1,0,2,1,0,1,3,2,1,2,1]", "expected": "6"},
+      {"input": "height=[4,2,0,3,2,5]",              "expected": "9"},
+      {"input": "height=[1,0,1]",                     "expected": "1"},
+      {"input": "height=[3,0,2,0,4]",                 "expected": "7"},
+      {"input": "height=[1,1]",                        "expected": "0"}
+    ]
+  }
+]
